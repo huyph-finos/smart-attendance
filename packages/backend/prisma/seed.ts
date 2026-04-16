@@ -1,4 +1,4 @@
-import { PrismaClient, Role, AttendanceStatus, ShiftType, Branch } from '@prisma/client';
+import { PrismaClient, Role, AttendanceStatus, ShiftType, Branch, AnomalyType, AnomalySeverity, LeaveType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 type BranchRecord = Branch;
@@ -235,6 +235,129 @@ async function main() {
     });
   }
   console.log('✅ Shifts created');
+
+  // Create anomalies for suspicious attendance records
+  console.log('🔍 Creating anomaly records...');
+  const suspiciousAttendances = await prisma.attendance.findMany({
+    where: { fraudScore: { gte: 20 } },
+    take: 200,
+    orderBy: { fraudScore: 'desc' },
+  });
+
+  const anomalyTypes = [AnomalyType.SPEED_ANOMALY, AnomalyType.DEVICE_MISMATCH, AnomalyType.LOCATION_SPOOF, AnomalyType.WIFI_MISMATCH, AnomalyType.TIME_PATTERN];
+  const anomalyDescs = [
+    'Tốc độ di chuyển bất thường giữa hai lần check-in',
+    'Thiết bị không khớp với thiết bị thường dùng',
+    'Phát hiện dấu hiệu giả mạo vị trí GPS',
+    'WiFi BSSID không khớp với danh sách chi nhánh',
+    'Pattern thời gian check-in bất thường so với lịch sử',
+  ];
+
+  for (const att of suspiciousAttendances) {
+    const idx = Math.floor(Math.random() * anomalyTypes.length);
+    const severity = att.fraudScore > 60 ? AnomalySeverity.CRITICAL
+      : att.fraudScore > 40 ? AnomalySeverity.HIGH
+      : att.fraudScore > 25 ? AnomalySeverity.MEDIUM
+      : AnomalySeverity.LOW;
+
+    await prisma.anomaly.create({
+      data: {
+        attendanceId: att.id,
+        type: anomalyTypes[idx],
+        severity,
+        description: anomalyDescs[idx],
+        isResolved: Math.random() < 0.3,
+        resolvedNote: Math.random() < 0.3 ? 'Đã xác minh với quản lý chi nhánh' : undefined,
+      },
+    });
+  }
+  console.log(`✅ ${suspiciousAttendances.length} anomalies created`);
+
+  // Create leave records
+  console.log('📋 Creating leave records...');
+  const leaveTypes = [LeaveType.ANNUAL, LeaveType.SICK, LeaveType.PERSONAL];
+  const leaveReasons = ['Nghỉ phép năm', 'Khám bệnh', 'Việc cá nhân', 'Du lịch gia đình', 'Nghỉ ốm'];
+  const sampleUsers = allUsers.slice(0, 300);
+
+  for (const user of sampleUsers) {
+    const numLeaves = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numLeaves; i++) {
+      const startOffset = Math.floor(Math.random() * 25) + 1;
+      const duration = 1 + Math.floor(Math.random() * 3);
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - startOffset);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + duration - 1);
+
+      await prisma.leave.create({
+        data: {
+          userId: user.id,
+          type: randomElement(leaveTypes),
+          startDate,
+          endDate,
+          reason: randomElement(leaveReasons),
+          isApproved: Math.random() < 0.6 ? true : Math.random() < 0.5 ? false : null,
+        },
+      });
+    }
+  }
+  console.log('✅ Leave records created');
+
+  // Create daily summaries for dashboard performance
+  console.log('📊 Creating daily summaries...');
+  for (let dayOffset = 29; dayOffset >= 0; dayOffset--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - dayOffset);
+    date.setHours(0, 0, 0, 0);
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+    for (const branch of branches) {
+      const branchEmployeeCount = allUsers.filter(u => u.branchId === branch.id).length;
+      const presentCount = Math.floor(branchEmployeeCount * (0.85 + Math.random() * 0.1));
+      const lateCount = Math.floor(presentCount * (0.08 + Math.random() * 0.08));
+
+      await prisma.dailySummary.create({
+        data: {
+          branchId: branch.id,
+          date,
+          totalEmployees: branchEmployeeCount,
+          presentCount,
+          lateCount,
+          absentCount: branchEmployeeCount - presentCount,
+          onLeaveCount: Math.floor(Math.random() * 3),
+          avgCheckInTime: `08:${String(Math.floor(Math.random() * 20)).padStart(2, '0')}`,
+          avgHoursWorked: 7.5 + Math.random() * 1.5,
+          totalOvertimeHrs: Math.random() * 10,
+          anomalyCount: Math.floor(Math.random() * 3),
+        },
+      });
+    }
+  }
+  console.log('✅ Daily summaries created');
+
+  // Create sample notifications
+  console.log('🔔 Creating notifications...');
+  const notifTemplates = [
+    { title: 'Nhắc nhở chấm công', body: 'Bạn chưa check-in hôm nay', type: 'reminder' },
+    { title: 'Anomaly phát hiện', body: 'Phát hiện bất thường trong chấm công', type: 'anomaly' },
+    { title: 'Đơn nghỉ phép được duyệt', body: 'Đơn nghỉ phép của bạn đã được phê duyệt', type: 'leave' },
+    { title: 'Ca làm mới', body: 'Bạn được phân ca mới cho tuần tới', type: 'shift' },
+    { title: 'Báo cáo tháng', body: 'Báo cáo chấm công tháng này đã sẵn sàng', type: 'report' },
+  ];
+
+  for (const user of allUsers.slice(0, 500)) {
+    const notif = randomElement(notifTemplates);
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: notif.title,
+        body: notif.body,
+        type: notif.type,
+        isRead: Math.random() < 0.4,
+      },
+    });
+  }
+  console.log('✅ Notifications created');
 
   console.log('\n🎉 Seeding completed!');
   console.log(`   - 1 Admin: admin@smartattendance.com / admin123`);

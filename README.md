@@ -104,10 +104,16 @@ notifications, ai_conversations, daily_summaries
 
 **Architecture**: Agentic loop — Claude gọi tools → tools query real DB → results fed back → Claude tiếp tục cho đến khi có câu trả lời cuối.
 
-### Creative Features
-- **Mood Check-in**: Nhân viên chọn emoji mood → AI phân tích team wellness
-- **Tool Use Visualization**: UI hiển thị từng tool call của AI (transparency)
-- **Real-time Dashboard**: WebSocket live feed check-in/check-out
+### Creative Features (25% điểm sáng tạo)
+- **Mood Check-in**: Nhân viên chọn emoji mood khi check-in → color-coded, animated
+- **Branch Leaderboard**: Top 10 chi nhánh xếp hạng theo attendance rate (gold/silver/bronze)
+- **AI Insights Dashboard**: Auto-generate phân tích từ 3 agents (attendance summary, anomaly alerts, predictions)
+- **Tool Use Visualization**: UI hiển thị từng tool call của AI với collapsible JSON (transparency)
+- **Real-time Clock Widget**: Đồng hồ lớn trên check-in page, cập nhật mỗi giây
+- **Smart Manager Banner**: Quick stats cho manager ("Hôm nay: X/Y NV đã chấm công")
+- **Notification Bell**: Real-time polling mỗi 30s, popover dropdown, mark read
+- **Conversation History**: Sidebar lưu lại lịch sử chat với AI agents
+- **Offline PWA**: Service worker + offline queue cho check-in khi mất mạng
 
 ## Chiến Lược Scale (100 chi nhánh, 5.000 nhân viên)
 
