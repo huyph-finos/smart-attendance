@@ -1,0 +1,330 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ ENUMS ============
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum AttendanceStatus {
+  ON_TIME
+  LATE
+  EARLY_LEAVE
+  ABSENT
+  ON_LEAVE
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  PERSONAL
+  MATERNITY
+  OTHER
+}
+
+enum AnomalyType {
+  SPEED_ANOMALY
+  DEVICE_MISMATCH
+  TIME_PATTERN
+  LOCATION_SPOOF
+  WIFI_MISMATCH
+  FREQUENCY_ANOMALY
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+  NIGHT
+  FLEXIBLE
+}
+
+// ============ MODELS ============
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  phone        String?
+  avatar       String?
+  role         Role     @default(EMPLOYEE)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  branchId     String? @map("branch_id")
+  branch       Branch? @relation(fields: [branchId], references: [id])
+  departmentId String? @map("department_id")
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  attendances      Attendance[]
+  devices          UserDevice[]
+  leaves           Leave[]
+  managedBranches  BranchManager[]
+  notifications    Notification[]
+  aiConversations  AiConversation[]
+  shiftAssignments ShiftAssignment[]
+
+  @@index([branchId])
+  @@index([departmentId])
+  @@index([role])
+  @@map("users")
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  address   String
+  latitude  Float
+  longitude Float
+  radius    Int      @default(200)
+  timezone  String   @default("Asia/Ho_Chi_Minh")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workStartTime String @default("08:00") @map("work_start_time")
+  workEndTime   String @default("17:00") @map("work_end_time")
+  lateThreshold Int    @default(15) @map("late_threshold")
+
+  wifiConfigs BranchWifi[]
+  employees   User[]
+  departments Department[]
+  managers    BranchManager[]
+  attendances Attendance[]
+  shifts      Shift[]
+
+  @@index([isActive])
+  @@map("branches")
+}
+
+model BranchWifi {
+  id       String  @id @default(uuid())
+  branchId String  @map("branch_id")
+  branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  ssid     String
+  bssid    String
+  floor    String?
+  isActive Boolean @default(true) @map("is_active")
+
+  @@unique([branchId, bssid])
+  @@index([bssid])
+  @@map("branch_wifi")
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  code      String
+  branchId  String   @map("branch_id")
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  employees User[]
+
+  @@unique([branchId, code])
+  @@map("departments")
+}
+
+model BranchManager {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  branchId   String   @map("branch_id")
+  branch     Branch   @relation(fields: [branchId], references: [id])
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  @@unique([userId, branchId])
+  @@map("branch_managers")
+}
+
+model Attendance {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  user        User             @relation(fields: [userId], references: [id])
+  branchId    String           @map("branch_id")
+  branch      Branch           @relation(fields: [branchId], references: [id])
+  date        DateTime         @db.Date
+  checkInTime DateTime?        @map("check_in_time")
+  checkOutTime DateTime?       @map("check_out_time")
+  status      AttendanceStatus @default(ON_TIME)
+  totalHours  Float?           @map("total_hours")
+  overtimeHours Float?         @map("overtime_hours") @default(0)
+
+  checkInLat       Float?  @map("check_in_lat")
+  checkInLng       Float?  @map("check_in_lng")
+  checkOutLat      Float?  @map("check_out_lat")
+  checkOutLng      Float?  @map("check_out_lng")
+  checkInWifiBssid String? @map("check_in_wifi_bssid")
+  checkOutWifiBssid String? @map("check_out_wifi_bssid")
+  checkInDeviceId  String? @map("check_in_device_id")
+  checkOutDeviceId String? @map("check_out_device_id")
+  checkInDistance  Float?  @map("check_in_distance")
+
+  fraudScore       Float   @default(0) @map("fraud_score")
+  isVerified       Boolean @default(true) @map("is_verified")
+  verificationNote String? @map("verification_note")
+  isOfflineSync    Boolean @default(false) @map("is_offline_sync")
+
+  mood String?
+
+  anomalies Anomaly[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, date])
+  @@index([branchId, date])
+  @@index([date, status])
+  @@index([fraudScore])
+  @@map("attendances")
+}
+
+model UserDevice {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id])
+  fingerprint String
+  userAgent   String   @map("user_agent")
+  platform    String?
+  isTrusted   Boolean  @default(false) @map("is_trusted")
+  lastUsedAt  DateTime @default(now()) @map("last_used_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, fingerprint])
+  @@index([fingerprint])
+  @@map("user_devices")
+}
+
+model Anomaly {
+  id           String          @id @default(uuid())
+  attendanceId String          @map("attendance_id")
+  attendance   Attendance      @relation(fields: [attendanceId], references: [id])
+  type         AnomalyType
+  severity     AnomalySeverity
+  description  String
+  metadata     Json?
+  isResolved   Boolean         @default(false) @map("is_resolved")
+  resolvedBy   String?         @map("resolved_by")
+  resolvedAt   DateTime?       @map("resolved_at")
+  resolvedNote String?         @map("resolved_note")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([attendanceId])
+  @@index([type, severity])
+  @@index([isResolved])
+  @@map("anomalies")
+}
+
+model Leave {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id])
+  type       LeaveType
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime  @map("end_date") @db.Date
+  reason     String?
+  isApproved Boolean?  @map("is_approved")
+  approvedBy String?   @map("approved_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, startDate, endDate])
+  @@map("leaves")
+}
+
+model Shift {
+  id        String    @id @default(uuid())
+  branchId  String    @map("branch_id")
+  branch    Branch    @relation(fields: [branchId], references: [id])
+  name      String
+  type      ShiftType
+  startTime String    @map("start_time")
+  endTime   String    @map("end_time")
+  isActive  Boolean   @default(true) @map("is_active")
+
+  assignments ShiftAssignment[]
+
+  @@map("shifts")
+}
+
+model ShiftAssignment {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id])
+  shiftId       String   @map("shift_id")
+  shift         Shift    @relation(fields: [shiftId], references: [id])
+  date          DateTime @db.Date
+  isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
+
+  @@unique([userId, date])
+  @@index([shiftId, date])
+  @@map("shift_assignments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  type      String
+  metadata  Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AiConversation {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  agentType String   @map("agent_type")
+  messages  Json
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, agentType])
+  @@map("ai_conversations")
+}
+
+model DailySummary {
+  id              String   @id @default(uuid())
+  branchId        String   @map("branch_id")
+  date            DateTime @db.Date
+  totalEmployees  Int      @map("total_employees")
+  presentCount    Int      @map("present_count")
+  lateCount       Int      @map("late_count")
+  absentCount     Int      @map("absent_count")
+  onLeaveCount    Int      @map("on_leave_count")
+  avgCheckInTime  String?  @map("avg_check_in_time")
+  avgHoursWorked  Float?   @map("avg_hours_worked")
+  totalOvertimeHrs Float?  @map("total_overtime_hrs")
+  anomalyCount    Int      @default(0) @map("anomaly_count")
+
+  @@unique([branchId, date])
+  @@index([date])
+  @@map("daily_summaries")
+}
