@@ -79,17 +79,25 @@ The backend `TransformInterceptor` wraps all success responses as `{ success: tr
 - Manager: manager.{branchCodeNoDash}.{n}@smartattendance.com / employee123
 
 ## Anti-Fraud Layers
+
+### WiFi Gate (mandatory)
+WiFi BSSID must match branch WiFi configs **before** scoring begins. If no WiFi data or BSSID mismatch → **auto-block** (score=100, passed=false). This is the primary verification method.
+
+### Scoring Layers (run after WiFi gate passes)
 | Layer | Max Score | Description |
 |-------|-----------|-------------|
 | WiFi BSSID | 30 pts | Match BSSID against branch WiFi configs |
-| GPS Geofence | 40 pts | Haversine distance vs branch radius |
+| GPS Geofence | 40 pts | Haversine distance vs branch radius (skipped if no GPS) |
 | Device Fingerprint | 50 pts | Mock location, trusted device check |
-| Speed Anomaly | 40 pts | Travel speed between check-ins |
+| Speed Anomaly | 40 pts | Travel speed between check-ins (skipped if no GPS) |
 | IP Subnet | 20 pts | Client IP vs branch `allowedIpRanges` CIDR |
 
+- GPS is **optional** — `latitude`/`longitude` are nullable in DTO; GPS & Speed layers score 0 when absent
 - Thresholds: 0-20 CLEAN, 21-50 SUSPICIOUS, 51-80 HIGH_RISK, >80 BLOCKED
 - Check-in page has **WiFi Simulation** mode (dropdown to select branch WiFi for demo/testing)
+- Admin users (no assigned branch) get a **branch selector** dropdown before WiFi simulation
 - Branch model has `allowedIpRanges: String[]` for IP verification (seeded with localhost ranges)
+- Frontend disables check-in button until valid WiFi is selected; shows warning message
 
 ## Performance Optimizations (2026-04-17)
 - **helmet** + **compression** middleware in `main.ts`

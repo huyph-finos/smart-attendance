@@ -46,6 +46,25 @@ export class AntiFraudService {
     dto: CheckInDto,
     clientIp?: string,
   ): Promise<FraudCheckResult> {
+    // WiFi BSSID must match branch — block immediately if not
+    const wifiGateResult = await this.checkWifiGate(branchId, dto);
+    if (!wifiGateResult.passed) {
+      this.logger.error(
+        `BLOCKED check-in for user ${userId}: WiFi verification failed — ${wifiGateResult.detail}`,
+      );
+      return {
+        score: 100,
+        passed: false,
+        checks: {
+          wifi: { score: 100, detail: wifiGateResult.detail },
+          gps: { score: 0, detail: 'Skipped — WiFi gate failed' },
+          device: { score: 0, detail: 'Skipped — WiFi gate failed' },
+          speed: { score: 0, detail: 'Skipped — WiFi gate failed' },
+          ipSubnet: { score: 0, detail: 'Skipped — WiFi gate failed' },
+        },
+      };
+    }
+
     const [wifiResult, gpsResult, deviceResult, speedResult, ipResult] =
       await Promise.all([
         this.checkWifi(branchId, dto),
@@ -136,6 +155,10 @@ export class AntiFraudService {
     branchId: string,
     dto: CheckInDto,
   ): Promise<{ score: number; detail: string; distance?: number }> {
+    if (dto.latitude == null || dto.longitude == null) {
+      return { score: 0, detail: 'No GPS data provided (skipped — using WiFi/IP verification)' };
+    }
+
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },
       select: { latitude: true, longitude: true, radius: true },
@@ -238,6 +261,10 @@ export class AntiFraudService {
     userId: string,
     dto: CheckInDto,
   ): Promise<{ score: number; detail: string; speedKmh?: number }> {
+    if (dto.latitude == null || dto.longitude == null) {
+      return { score: 0, detail: 'No GPS data provided (skipped)' };
+    }
+
     // Look at the user's most recent attendance with GPS data (today or yesterday)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -336,6 +363,41 @@ export class AntiFraudService {
     }
 
     return { score: 20, detail: `IP ${clientIp} not in allowed subnet` };
+  }
+
+  // ──────────────────────────────────────────────
+  // WiFi Gate (no-GPS mode)
+  // ──────────────────────────────────────────────
+
+  /**
+   * Hard gate: when GPS is unavailable, WiFi BSSID must match the branch.
+   * Returns passed=false if no WiFi data or BSSID doesn't match.
+   */
+  private async checkWifiGate(
+    branchId: string,
+    dto: CheckInDto,
+  ): Promise<{ passed: boolean; detail: string }> {
+    if (!dto.wifiBssid) {
+      return { passed: false, detail: 'No GPS and no WiFi data — cannot verify location' };
+    }
+
+    const branchWifiList = await this.prisma.branchWifi.findMany({
+      where: { branchId, isActive: true },
+    });
+
+    if (branchWifiList.length === 0) {
+      return { passed: false, detail: 'No GPS and branch has no WiFi configured — cannot verify location' };
+    }
+
+    const match = branchWifiList.some(
+      (w) => w.bssid.toLowerCase() === dto.wifiBssid!.toLowerCase(),
+    );
+
+    if (match) {
+      return { passed: true, detail: 'WiFi BSSID matches branch network (no-GPS mode)' };
+    }
+
+    return { passed: false, detail: 'No GPS and WiFi BSSID does not match any branch network' };
   }
 
   // ──────────────────────────────────────────────

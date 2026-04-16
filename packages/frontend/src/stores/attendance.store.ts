@@ -4,8 +4,8 @@ import { create } from 'zustand';
 import apiClient from '@/lib/api-client';
 
 export interface CheckInData {
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   accuracy: number;
   wifiSsid?: string | null;
   wifiBssid?: string | null;

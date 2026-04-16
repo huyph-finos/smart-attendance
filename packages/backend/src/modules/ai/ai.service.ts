@@ -118,7 +118,7 @@ export class AiService {
       const candidate = response.response.candidates?.[0];
       if (!candidate) break;
 
-      const functionCalls = candidate.content.parts.filter(
+      const functionCalls = (candidate.content?.parts ?? []).filter(
         (part): part is FunctionCallPart => 'functionCall' in part,
       );
 
@@ -195,9 +195,9 @@ export class AiService {
 
     // 8. Extract the final text response
     const candidate = response.response.candidates?.[0];
-    const textParts = candidate?.content.parts.filter(
+    const textParts = (candidate?.content?.parts ?? []).filter(
       (part: Part) => 'text' in part,
-    ) ?? [];
+    );
     const finalResponse = textParts.map((p: any) => p.text).join('\n');
 
     // Add final model message to contents for storage

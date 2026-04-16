@@ -9,15 +9,17 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CheckInDto {
-  @ApiProperty({ description: 'User latitude', example: 10.7769 })
+  @ApiPropertyOptional({ description: 'User latitude', example: 10.7769 })
+  @IsOptional()
   @IsNumber()
   @IsLatitude()
-  latitude: number;
+  latitude?: number;
 
-  @ApiProperty({ description: 'User longitude', example: 106.7009 })
+  @ApiPropertyOptional({ description: 'User longitude', example: 106.7009 })
+  @IsOptional()
   @IsNumber()
   @IsLongitude()
-  longitude: number;
+  longitude?: number;
 
   @ApiPropertyOptional({ description: 'Connected WiFi SSID' })
   @IsOptional()

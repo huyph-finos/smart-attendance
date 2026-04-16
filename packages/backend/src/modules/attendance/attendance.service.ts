@@ -51,9 +51,11 @@ export class AttendanceService {
     // If user has no branch (e.g. ADMIN), find the nearest branch by GPS
     let branch = user.branch;
     if (!branch) {
-      branch = await this.findNearestBranch(dto.latitude, dto.longitude);
+      if (dto.latitude != null && dto.longitude != null) {
+        branch = await this.findNearestBranch(dto.latitude, dto.longitude);
+      }
       if (!branch) {
-        throw new ForbiddenException('No active branch found');
+        throw new ForbiddenException('No active branch found. Please ensure GPS is enabled or contact your manager to assign a branch.');
       }
     }
     const today = new Date();
@@ -89,13 +91,10 @@ export class AttendanceService {
       ? AttendanceStatus.LATE
       : AttendanceStatus.ON_TIME;
 
-    // Calculate distance from branch
-    const distance = haversineDistance(
-      dto.latitude,
-      dto.longitude,
-      branch.latitude,
-      branch.longitude,
-    );
+    // Calculate distance from branch (only if GPS available)
+    const distance = (dto.latitude != null && dto.longitude != null)
+      ? haversineDistance(dto.latitude, dto.longitude, branch.latitude, branch.longitude)
+      : null;
 
     // 5. Create attendance record
     const attendance = await this.prisma.attendance.create({
@@ -105,11 +104,11 @@ export class AttendanceService {
         date: today,
         checkInTime,
         status,
-        checkInLat: dto.latitude,
-        checkInLng: dto.longitude,
+        checkInLat: dto.latitude ?? null,
+        checkInLng: dto.longitude ?? null,
         checkInWifiBssid: dto.wifiBssid ?? null,
         checkInDeviceId: dto.deviceFingerprint,
-        checkInDistance: Math.round(distance),
+        checkInDistance: distance != null ? Math.round(distance) : null,
         fraudScore: fraudResult.score,
         isVerified: fraudResult.score <= 50,
         verificationNote: this.buildVerificationNote(fraudResult),
@@ -200,8 +199,8 @@ export class AttendanceService {
       where: { id: attendance.id },
       data: {
         checkOutTime,
-        checkOutLat: dto.latitude,
-        checkOutLng: dto.longitude,
+        checkOutLat: dto.latitude ?? null,
+        checkOutLng: dto.longitude ?? null,
         checkOutWifiBssid: dto.wifiBssid ?? null,
         checkOutDeviceId: dto.deviceFingerprint,
         totalHours,

@@ -26,7 +26,6 @@ import {
   WifiOff,
   Fingerprint,
   CheckCircle2,
-  XCircle,
   Loader2,
   RefreshCw,
   Shield,
@@ -73,6 +72,13 @@ export default function AttendancePage() {
     branchName?: string;
   } | null>(null);
 
+  // Branch selection for users without assigned branch (e.g. ADMIN)
+  const [allBranches, setAllBranches] = useState<
+    Array<{ id: string; name: string; code: string }>
+  >([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const effectiveBranchId = user?.branchId ?? selectedBranchId;
+
   // WiFi simulation state
   const [branchWifiList, setBranchWifiList] = useState<
     Array<{ id: string; ssid: string; bssid: string; floor?: string | null }>
@@ -109,28 +115,46 @@ export default function AttendancePage() {
       .catch(() => {});
   }, [isAdminOrManager]);
 
+  // Fetch all branches for admin/users without assigned branch
+  useEffect(() => {
+    if (user?.branchId) return;
+    apiClient
+      .get("/branches", { params: { limit: 200 } })
+      .then((res) => {
+        const payload = res.data?.data ?? res.data;
+        const list = Array.isArray(payload) ? payload : payload.data ?? [];
+        setAllBranches(list.map((b: any) => ({ id: b.id, name: b.name, code: b.code })));
+      })
+      .catch(() => {});
+  }, [user?.branchId]);
+
   // Fetch branch WiFi configs for simulation
   useEffect(() => {
-    if (!user?.branchId) return;
+    if (!effectiveBranchId) return;
+    setBranchWifiList([]);
+    setSimulatedWifiId(null);
     apiClient
-      .get(`/branches/${user.branchId}`)
+      .get(`/branches/${effectiveBranchId}`)
       .then((res) => {
         const branch = res.data?.data ?? res.data;
         setBranchWifiList(branch.wifiConfigs ?? []);
       })
       .catch(() => {});
-  }, [user?.branchId]);
+  }, [effectiveBranchId]);
 
   const hasCheckedIn = !!todayAttendance?.checkInTime;
   const hasCheckedOut = !!todayAttendance?.checkOutTime;
 
-  const isGeoReady = !geo.isLoading && !geo.error && geo.latitude !== null;
+  const hasGps = !geo.isLoading && !geo.error && geo.latitude !== null;
+  const hasWifi = !!(simulatedWifi?.bssid ?? wifi.bssid);
+  // WiFi is always required for location verification
+  const canCheckIn = !geo.isLoading && hasWifi;
 
   const buildPayload = useCallback((): CheckInData | null => {
-    if (geo.latitude === null || geo.longitude === null) return null;
+    if (!device.fingerprint) return null;
     return {
-      latitude: geo.latitude,
-      longitude: geo.longitude,
+      latitude: geo.latitude ?? undefined,
+      longitude: geo.longitude ?? undefined,
       accuracy: geo.accuracy ?? 0,
       wifiSsid: simulatedWifi?.ssid ?? wifi.ssid,
       wifiBssid: simulatedWifi?.bssid ?? wifi.bssid,
@@ -282,7 +306,7 @@ export default function AttendancePage() {
               disabled={
                 isCheckingIn ||
                 isCheckingOut ||
-                !isGeoReady
+                !canCheckIn
               }
               className={cn(
                 "h-24 w-24 rounded-full text-lg font-bold shadow-lg transition-all",
@@ -303,6 +327,12 @@ export default function AttendancePage() {
             <p className="text-sm font-medium">
               {hasCheckedIn ? "Tap to Check Out" : "Tap to Check In"}
             </p>
+          )}
+
+          {!hasCheckedOut && !geo.isLoading && !hasWifi && (
+            <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              Vui long chon WiFi cua chi nhanh de xac minh vi tri
+            </div>
           )}
 
           {/* Error */}
@@ -382,6 +412,36 @@ export default function AttendancePage() {
         </Card>
       )}
 
+      {/* Branch selector for admin/users without assigned branch */}
+      {!hasCheckedOut && !user?.branchId && allBranches.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <MapPin className="h-4 w-4" />
+              Chon chi nhanh
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={selectedBranchId ?? "none"}
+              onValueChange={(val) => setSelectedBranchId(val === "none" ? null : val)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Chon chi nhanh de cham cong..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">-- Chon chi nhanh --</SelectItem>
+                {allBranches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} ({b.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
+
       {/* WiFi Simulation (for testing/demo) */}
       {!hasCheckedOut && branchWifiList.length > 0 && (
         <Card>
@@ -446,10 +506,10 @@ export default function AttendancePage() {
             ) : geo.error ? (
               <Badge
                 variant="outline"
-                className="gap-1 border-red-200 bg-red-50 text-red-600"
+                className="gap-1 border-amber-200 bg-amber-50 text-amber-600"
               >
-                <XCircle className="h-3 w-3" />
-                Error
+                <WifiOff className="h-3 w-3" />
+                Unavailable — WiFi/IP used
               </Badge>
             ) : (
               <div className="flex items-center gap-2">
