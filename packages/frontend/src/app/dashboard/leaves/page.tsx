@@ -49,7 +49,7 @@ interface Leave {
   startDate: string;
   endDate: string;
   reason?: string;
-  status: string;
+  isApproved: boolean | null;
   user?: {
     id: string;
     firstName: string;
@@ -57,6 +57,11 @@ interface Leave {
     email: string;
   };
   createdAt?: string;
+}
+
+function getLeaveStatus(isApproved: boolean | null): string {
+  if (isApproved === null) return "PENDING";
+  return isApproved ? "APPROVED" : "REJECTED";
 }
 
 interface PaginatedResponse {
@@ -331,9 +336,9 @@ export default function LeavesPage() {
                           <TableCell className="max-w-[200px] truncate text-sm">
                             {leave.reason || "--"}
                           </TableCell>
-                          <TableCell>{getStatusBadge(leave.status)}</TableCell>
+                          <TableCell>{getStatusBadge(getLeaveStatus(leave.isApproved))}</TableCell>
                           <TableCell className="text-right">
-                            {leave.status === "PENDING" && (
+                            {leave.isApproved === null && (
                               <Button
                                 variant="ghost"
                                 size="sm"

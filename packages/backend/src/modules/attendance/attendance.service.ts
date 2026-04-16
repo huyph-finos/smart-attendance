@@ -44,14 +44,18 @@ export class AttendanceService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    if (!user.branch) {
-      throw new ForbiddenException('User is not assigned to a branch');
-    }
     if (!user.isActive) {
       throw new ForbiddenException('User account is inactive');
     }
 
-    const branch = user.branch;
+    // If user has no branch (e.g. ADMIN), find the nearest branch by GPS
+    let branch = user.branch;
+    if (!branch) {
+      branch = await this.findNearestBranch(dto.latitude, dto.longitude);
+      if (!branch) {
+        throw new ForbiddenException('No active branch found');
+      }
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -537,5 +541,30 @@ export class AttendanceService {
       this.logger.error('Failed to get cached attendance', error);
     }
     return null;
+  }
+
+  /**
+   * Find the nearest active branch to the given GPS coordinates.
+   * Used as fallback for users without a fixed branch (e.g. ADMIN).
+   */
+  private async findNearestBranch(lat: number, lng: number) {
+    const branches = await this.prisma.branch.findMany({
+      where: { isActive: true },
+    });
+
+    if (branches.length === 0) return null;
+
+    let nearest = branches[0];
+    let minDistance = haversineDistance(lat, lng, nearest.latitude, nearest.longitude);
+
+    for (let i = 1; i < branches.length; i++) {
+      const d = haversineDistance(lat, lng, branches[i].latitude, branches[i].longitude);
+      if (d < minDistance) {
+        minDistance = d;
+        nearest = branches[i];
+      }
+    }
+
+    return nearest;
   }
 }

@@ -83,8 +83,6 @@ export default function DashboardPage() {
             .slice(0, 10);
           setBranchLeaderboard(sorted);
         }
-      } catch {
-        // Silently fail - show empty state
       } finally {
         setLoading(false);
       }

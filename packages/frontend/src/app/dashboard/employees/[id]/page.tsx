@@ -178,8 +178,8 @@ export default function EmployeeDetailPage() {
       const dateFrom = new Date(Date.now() - 7 * 86400000)
         .toISOString()
         .split("T")[0];
-      const { data: response } = await apiClient.get("/attendance/history", {
-        params: { userId: employeeId, dateFrom, dateTo, limit: 7 },
+      const { data: response } = await apiClient.get(`/attendance/user/${employeeId}/history`, {
+        params: { startDate: dateFrom, endDate: dateTo, limit: 7 },
       });
       const attResult = response.data ?? response;
       setAttendance(attResult.data ?? attResult ?? []);
@@ -211,9 +211,9 @@ export default function EmployeeDetailPage() {
       const payload: Record<string, unknown> = {
         firstName: editForm.firstName,
         lastName: editForm.lastName,
+        phone: editForm.phone || null,
         role: editForm.role,
       };
-      if (editForm.phone) payload.phone = editForm.phone;
 
       await apiClient.patch(`/users/${employeeId}`, payload);
       setEditOpen(false);

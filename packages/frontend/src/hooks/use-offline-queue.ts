@@ -7,8 +7,7 @@ import {
   clearSynced,
   type OfflineAction,
 } from '@/lib/offline-store';
-
-const API_BULK_SYNC = '/api/attendance/bulk-sync';
+import apiClient from '@/lib/api-client';
 
 function subscribeOnline(callback: () => void) {
   window.addEventListener('online', callback);
@@ -56,26 +55,22 @@ export function useOfflineQueue() {
     let failed = 0;
 
     try {
-      const response = await fetch(API_BULK_SYNC, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actions: pending }),
+      const { data: response } = await apiClient.post('/attendance/bulk-sync', {
+        records: pending.map((a: OfflineAction) => a.payload),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        // Mark individual actions as synced based on server response
-        const syncedIds: string[] = result.syncedIds ?? pending.map((a: OfflineAction) => a.id);
-        syncedIds.forEach((id: string) => markSynced(id));
-        synced = syncedIds.length;
-        failed = pending.length - synced;
+      const result = response.data ?? response;
+      // Mark individual actions as synced
+      const createdCount = result.created ?? 0;
+      if (createdCount > 0 || result.skipped > 0) {
+        pending.forEach((a: OfflineAction) => markSynced(a.id));
+        synced = pending.length;
         clearSynced();
       } else {
-        // Server error — keep actions in queue for retry
         failed = pending.length;
       }
     } catch {
-      // Network error — keep actions in queue
+      // Network or server error — keep actions in queue for retry
       failed = pending.length;
     } finally {
       syncInProgress.current = false;

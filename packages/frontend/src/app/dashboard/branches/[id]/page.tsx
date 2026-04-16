@@ -57,7 +57,7 @@ interface BranchDetail {
   workEndTime: string | null;
   lateThreshold: number | null;
   isActive?: boolean;
-  employeeCount?: number;
+  _count?: { employees: number };
   wifiConfigs?: WifiConfig[];
 }
 
@@ -168,13 +168,13 @@ export default function BranchDetailPage() {
         address: editForm.address,
         latitude: parseFloat(editForm.latitude),
         longitude: parseFloat(editForm.longitude),
+        radius: editForm.radius ? parseFloat(editForm.radius) : null,
+        workStartTime: editForm.workStartTime || null,
+        workEndTime: editForm.workEndTime || null,
+        lateThreshold: editForm.lateThreshold
+          ? parseInt(editForm.lateThreshold, 10)
+          : null,
       };
-      if (editForm.radius) payload.radius = parseFloat(editForm.radius);
-      if (editForm.workStartTime)
-        payload.workStartTime = editForm.workStartTime;
-      if (editForm.workEndTime) payload.workEndTime = editForm.workEndTime;
-      if (editForm.lateThreshold)
-        payload.lateThreshold = parseInt(editForm.lateThreshold, 10);
 
       await apiClient.patch(`/branches/${branchId}`, payload);
       setEditOpen(false);
@@ -351,7 +351,7 @@ export default function BranchDetailPage() {
             <div>
               <p className="text-xs text-muted-foreground">Total Employees</p>
               <p className="text-sm font-medium">
-                {branch.employeeCount ?? employees.length}
+                {branch._count?.employees ?? employees.length}
               </p>
             </div>
           </CardContent>

@@ -41,7 +41,12 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      originalRequest.url?.includes('/auth/login') ||
+      originalRequest.url?.includes('/auth/refresh')
+    ) {
       return Promise.reject(error);
     }
 
@@ -59,6 +64,7 @@ apiClient.interceptors.response.use(
 
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
+      isRefreshing = false;
       clearTokens();
       if (typeof window !== 'undefined') {
         window.location.href = '/login';

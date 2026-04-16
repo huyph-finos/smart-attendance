@@ -50,45 +50,56 @@ export function useGeolocation(): GeolocationState {
 
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
+    const onSuccess = (position: GeolocationPosition) => {
+      const mockDetected = detectMockLocation(position);
+      setState((prev) => ({
+        ...prev,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        error: null,
+        isLoading: false,
+        mockLocationDetected: mockDetected,
+      }));
+    };
+
+    const onError = (error: GeolocationPositionError) => {
+      let errorMessage: string;
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage = 'Location permission denied';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage = 'Location information is unavailable';
+          break;
+        case error.TIMEOUT:
+          errorMessage = 'Location request timed out';
+          break;
+        default:
+          errorMessage = 'An unknown error occurred';
+      }
+      setState((prev) => ({
+        ...prev,
+        error: errorMessage,
+        isLoading: false,
+      }));
+    };
+
+    // Try high accuracy first, fallback to low accuracy on timeout
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const mockDetected = detectMockLocation(position);
-        setState((prev) => ({
-          ...prev,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          error: null,
-          isLoading: false,
-          mockLocationDetected: mockDetected,
-        }));
-      },
+      onSuccess,
       (error) => {
-        let errorMessage: string;
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'Location permission denied';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information is unavailable';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'Location request timed out';
-            break;
-          default:
-            errorMessage = 'An unknown error occurred';
+        if (error.code === error.TIMEOUT) {
+          navigator.geolocation.getCurrentPosition(
+            onSuccess,
+            onError,
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+          );
+        } else {
+          onError(error);
         }
-        setState((prev) => ({
-          ...prev,
-          error: errorMessage,
-          isLoading: false,
-        }));
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
     );
   }, []);
 

@@ -7,10 +7,11 @@ export interface CheckInData {
   latitude: number;
   longitude: number;
   accuracy: number;
-  wifiSSID?: string | null;
-  wifiBSSID?: string | null;
+  wifiSsid?: string | null;
+  wifiBssid?: string | null;
   deviceFingerprint?: string;
   mockLocationDetected?: boolean;
+  mood?: string | null;
 }
 
 export interface AttendanceState {
@@ -45,7 +46,7 @@ export const useAttendanceStore = create<AttendanceState>((set) => ({
         data,
       );
       const result = response.data ?? response;
-      set({ todayAttendance: result, isCheckingIn: false });
+      set({ todayAttendance: result.attendance ?? result, isCheckingIn: false });
       return result;
     } catch (error) {
       set({ isCheckingIn: false });
@@ -61,7 +62,7 @@ export const useAttendanceStore = create<AttendanceState>((set) => ({
         data,
       );
       const result = response.data ?? response;
-      set({ todayAttendance: result, isCheckingOut: false });
+      set({ todayAttendance: result.attendance ?? result, isCheckingOut: false });
       return result;
     } catch (error) {
       set({ isCheckingOut: false });

@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import apiClient from '@/lib/api-client';
-import { setTokens, clearTokens } from '@/lib/auth';
+import { setTokens, clearTokens, getRefreshToken } from '@/lib/auth';
 
 export interface AuthUser {
   id: string;
@@ -45,7 +45,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      await apiClient.post('/auth/logout');
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        await apiClient.post('/auth/logout', { refreshToken });
+      }
     } catch {
       // Proceed with local logout even if the API call fails
     } finally {

@@ -128,7 +128,13 @@ function renderMarkdown(text: string) {
       continue;
     }
 
-    let html = line
+    let escaped = line
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+    let html = escaped
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(
@@ -277,7 +283,7 @@ export default function InsightsPage() {
 
       const result = response.data ?? response;
       const content =
-        result?.content ?? result?.message ?? "Không có phản hồi.";
+        result?.response ?? result?.content ?? result?.message ?? "Không có phản hồi.";
       const toolCallCount = (result?.toolCalls ?? []).length;
 
       setStates((prev) => ({

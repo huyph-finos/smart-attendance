@@ -31,7 +31,7 @@ interface AttendanceRecord {
   checkOutTime: string | null;
   status: string;
   totalHours: number | null;
-  overtime: number | null;
+  overtimeHours: number | null;
   fraudScore: number | null;
 }
 
@@ -136,8 +136,8 @@ export default function AttendanceHistoryPage() {
         limit,
       };
       if (statusFilter !== "ALL") params.status = statusFilter;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
+      if (dateFrom) params.startDate = dateFrom;
+      if (dateTo) params.endDate = dateTo;
 
       const { data: response } = await apiClient.get("/attendance/history", {
         params,
@@ -291,8 +291,8 @@ export default function AttendanceHistoryPage() {
                           : "--"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {record.overtime !== null && record.overtime > 0
-                          ? `${record.overtime.toFixed(1)}h`
+                        {record.overtimeHours !== null && record.overtimeHours > 0
+                          ? `${record.overtimeHours.toFixed(1)}h`
                           : "--"}
                       </TableCell>
                       <TableCell className="text-center">

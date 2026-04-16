@@ -44,17 +44,19 @@ import {
 
 interface Anomaly {
   id: string;
-  date: string;
   type: string;
   severity: string;
   description: string;
   isResolved: boolean;
   resolvedNote?: string;
-  user?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+  attendance?: {
+    date?: string;
+    user?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
   };
   createdAt?: string;
 }
@@ -429,11 +431,11 @@ export default function AnomaliesPage() {
                   anomalies.map((anomaly) => (
                     <TableRow key={anomaly.id}>
                       <TableCell className="text-sm">
-                        {formatDate(anomaly.date || anomaly.createdAt || "")}
+                        {formatDate(anomaly.attendance?.date || anomaly.createdAt || "")}
                       </TableCell>
                       <TableCell className="font-medium text-sm">
-                        {anomaly.user
-                          ? `${anomaly.user.firstName} ${anomaly.user.lastName}`
+                        {anomaly.attendance?.user
+                          ? `${anomaly.attendance.user.firstName} ${anomaly.attendance.user.lastName}`
                           : "--"}
                       </TableCell>
                       <TableCell>{getTypeBadge(anomaly.type)}</TableCell>

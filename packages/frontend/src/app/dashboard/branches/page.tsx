@@ -33,7 +33,7 @@ interface Branch {
   address: string;
   workStartTime: string | null;
   workEndTime: string | null;
-  employeeCount?: number;
+  _count?: { employees: number };
   isActive?: boolean;
 }
 
@@ -194,7 +194,7 @@ export default function BranchesPage() {
                           : "--"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {branch.employeeCount ?? 0}
+                        {branch._count?.employees ?? 0}
                       </TableCell>
                       <TableCell>
                         <Badge

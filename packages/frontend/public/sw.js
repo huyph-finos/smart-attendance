@@ -17,7 +17,14 @@ const PRECACHE_URLS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
+      // Cache each URL individually so one failure doesn't block the rest
+      return Promise.allSettled(
+        PRECACHE_URLS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn(`[SW] Failed to precache ${url}:`, err);
+          })
+        )
+      );
     })
   );
   // Activate immediately without waiting for existing clients to close

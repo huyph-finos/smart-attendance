@@ -362,11 +362,9 @@ export class AiService {
    */
   private async incrementRateLimit(userId: string) {
     const key = `ai:ratelimit:${userId}`;
-    const current = await this.redis.get(key);
-    if (current) {
-      await this.redis.set(key, String(parseInt(current, 10) + 1));
-    } else {
-      await this.redis.set(key, '1', 'EX', 3600);
+    const count = await this.redis.incr(key);
+    if (count === 1) {
+      await this.redis.expire(key, 3600);
     }
   }
 }

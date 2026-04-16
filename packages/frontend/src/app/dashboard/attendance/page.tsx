@@ -97,21 +97,21 @@ export default function AttendancePage() {
   const hasCheckedIn = !!todayAttendance?.checkInTime;
   const hasCheckedOut = !!todayAttendance?.checkOutTime;
 
+  const isGeoReady = !geo.isLoading && !geo.error && geo.latitude !== null;
+
   const buildPayload = useCallback((): CheckInData | null => {
-    if (geo.latitude === null || geo.longitude === null) {
-      setError("Waiting for GPS location. Please allow location access.");
-      return null;
-    }
+    if (geo.latitude === null || geo.longitude === null) return null;
     return {
       latitude: geo.latitude,
       longitude: geo.longitude,
       accuracy: geo.accuracy ?? 0,
-      wifiSSID: wifi.ssid,
-      wifiBSSID: wifi.bssid,
+      wifiSsid: wifi.ssid,
+      wifiBssid: wifi.bssid,
       deviceFingerprint: device.fingerprint,
       mockLocationDetected: geo.mockLocationDetected,
+      mood: selectedMood,
     };
-  }, [geo, wifi, device]);
+  }, [geo, wifi, device, selectedMood]);
 
   async function handleCheckIn() {
     setError(null);
@@ -120,7 +120,7 @@ export default function AttendancePage() {
 
     try {
       const result = await checkIn(payload);
-      setFraudResult(result?.fraudScore ?? null);
+      setFraudResult(result?.fraudCheck?.score ?? null);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ?? "Check-in failed. Please try again."
@@ -135,7 +135,7 @@ export default function AttendancePage() {
 
     try {
       const result = await checkOut(payload);
-      setFraudResult(result?.fraudScore ?? null);
+      setFraudResult(result?.fraudCheck?.score ?? null);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ?? "Check-out failed. Please try again."
@@ -255,8 +255,7 @@ export default function AttendancePage() {
               disabled={
                 isCheckingIn ||
                 isCheckingOut ||
-                geo.isLoading ||
-                geo.latitude === null
+                !isGeoReady
               }
               className={cn(
                 "h-24 w-24 rounded-full text-lg font-bold shadow-lg transition-all",

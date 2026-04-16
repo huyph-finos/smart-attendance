@@ -53,8 +53,8 @@ interface ReportRow {
 
 interface ReportStats {
   totalEmployees?: number;
-  totalPresent?: number;
-  totalLate?: number;
+  todayPresent?: number;
+  todayLate?: number;
   attendanceRate?: number;
 }
 
@@ -95,25 +95,36 @@ export default function ReportsPage() {
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { type: activeTab };
-      if (branchFilter !== "ALL") params.branchId = branchFilter;
+      const reportParams: Record<string, string> = {};
+      if (branchFilter !== "ALL") reportParams.branchId = branchFilter;
 
+      let reportEndpoint: string;
       if (activeTab === "daily") {
-        params.date = date;
+        reportEndpoint = "/reports/daily";
+        reportParams.date = date;
       } else if (activeTab === "weekly") {
-        params.date = weekDate;
+        reportEndpoint = "/reports/weekly";
+        reportParams.weekOf = weekDate;
       } else if (activeTab === "monthly") {
-        params.month = month;
+        reportEndpoint = "/reports/monthly";
+        const [y, m] = month.split("-");
+        reportParams.month = String(parseInt(m, 10));
+        reportParams.year = y;
+      } else {
+        reportEndpoint = "/reports/summary";
       }
 
+      const statsParams: Record<string, string> = {};
+      if (branchFilter !== "ALL") statsParams.branchId = branchFilter;
+
       const [reportRes, statsRes] = await Promise.allSettled([
-        apiClient.get("/reports", { params }),
-        apiClient.get("/reports/stats", { params }),
+        apiClient.get(reportEndpoint, { params: reportParams }),
+        apiClient.get("/reports/summary", { params: statsParams }),
       ]);
 
       if (reportRes.status === "fulfilled") {
         const reportResult = reportRes.value.data.data ?? reportRes.value.data;
-        setReportData(reportResult?.data ?? reportResult ?? []);
+        setReportData(reportResult?.branches ?? reportResult?.data ?? reportResult ?? []);
       }
       if (statsRes.status === "fulfilled") {
         const statsResult = statsRes.value.data.data ?? statsRes.value.data;
@@ -134,13 +145,16 @@ export default function ReportsPage() {
   const handleExport = async () => {
     try {
       const params: Record<string, string> = {
-        type: activeTab,
         format: "xlsx",
       };
       if (branchFilter !== "ALL") params.branchId = branchFilter;
       if (activeTab === "daily") params.date = date;
-      else if (activeTab === "weekly") params.date = weekDate;
-      else if (activeTab === "monthly") params.month = month;
+      else if (activeTab === "weekly") params.weekOf = weekDate;
+      else if (activeTab === "monthly") {
+        const [y, m] = month.split("-");
+        params.month = String(parseInt(m, 10));
+        params.year = y;
+      }
 
       const response = await apiClient.get("/reports/export", {
         params,
@@ -170,14 +184,14 @@ export default function ReportsPage() {
     },
     {
       title: "Present",
-      value: stats?.totalPresent ?? 0,
+      value: stats?.todayPresent ?? 0,
       icon: Clock,
       color: "text-green-600",
       bgColor: "bg-green-50 dark:bg-green-950",
     },
     {
       title: "Late",
-      value: stats?.totalLate ?? 0,
+      value: stats?.todayLate ?? 0,
       icon: AlertTriangle,
       color: "text-orange-600",
       bgColor: "bg-orange-50 dark:bg-orange-950",
@@ -324,11 +338,12 @@ export default function ReportsPage() {
                 data={reportData}
                 loading={loading}
                 columns={[
-                  { key: "employeeName", label: "Employee" },
-                  { key: "checkInTime", label: "Check In", format: "time" },
-                  { key: "checkOutTime", label: "Check Out", format: "time" },
-                  { key: "status", label: "Status" },
-                  { key: "totalHours", label: "Hours", format: "hours" },
+                  { key: "branchName", label: "Branch" },
+                  { key: "totalEmployees", label: "Employees" },
+                  { key: "present", label: "Present" },
+                  { key: "late", label: "Late" },
+                  { key: "absent", label: "Absent" },
+                  { key: "avgHours", label: "Avg Hours", format: "hours" },
                 ]}
               />
             </CardContent>
@@ -348,15 +363,12 @@ export default function ReportsPage() {
                 data={reportData}
                 loading={loading}
                 columns={[
-                  { key: "employeeName", label: "Employee" },
-                  { key: "onTimeCount", label: "On Time" },
-                  { key: "lateCount", label: "Late" },
-                  { key: "absentCount", label: "Absent" },
-                  {
-                    key: "attendanceRate",
-                    label: "Rate",
-                    format: "percent",
-                  },
+                  { key: "branchName", label: "Branch" },
+                  { key: "totalEmployees", label: "Employees" },
+                  { key: "present", label: "Present" },
+                  { key: "late", label: "Late" },
+                  { key: "absent", label: "Absent" },
+                  { key: "avgHours", label: "Avg Hours", format: "hours" },
                 ]}
               />
             </CardContent>
@@ -376,16 +388,12 @@ export default function ReportsPage() {
                 data={reportData}
                 loading={loading}
                 columns={[
-                  { key: "employeeName", label: "Employee" },
-                  { key: "onTimeCount", label: "On Time" },
-                  { key: "lateCount", label: "Late" },
-                  { key: "absentCount", label: "Absent" },
-                  { key: "totalHours", label: "Total Hours", format: "hours" },
-                  {
-                    key: "attendanceRate",
-                    label: "Rate",
-                    format: "percent",
-                  },
+                  { key: "branchName", label: "Branch" },
+                  { key: "totalEmployees", label: "Employees" },
+                  { key: "present", label: "Present" },
+                  { key: "late", label: "Late" },
+                  { key: "absent", label: "Absent" },
+                  { key: "avgHours", label: "Avg Hours", format: "hours" },
                 ]}
               />
             </CardContent>
@@ -403,15 +411,12 @@ export default function ReportsPage() {
                 data={reportData}
                 loading={loading}
                 columns={[
-                  { key: "employeeName", label: "Employee" },
-                  { key: "onTimeCount", label: "On Time" },
-                  { key: "lateCount", label: "Late" },
-                  { key: "absentCount", label: "Absent" },
-                  {
-                    key: "attendanceRate",
-                    label: "Rate",
-                    format: "percent",
-                  },
+                  { key: "branchName", label: "Branch" },
+                  { key: "totalEmployees", label: "Employees" },
+                  { key: "present", label: "Present" },
+                  { key: "late", label: "Late" },
+                  { key: "absent", label: "Absent" },
+                  { key: "avgHours", label: "Avg Hours", format: "hours" },
                 ]}
               />
             </CardContent>
