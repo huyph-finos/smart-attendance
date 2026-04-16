@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,13 +38,16 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const consecutiveFailures = useRef(0);
+
   const fetchUnreadCount = useCallback(async () => {
     try {
       const { data } = await apiClient.get("/notifications/unread-count");
       const payload = data.data ?? data;
       setUnreadCount(payload.unreadCount ?? 0);
+      consecutiveFailures.current = 0;
     } catch {
-      // Silently ignore errors for polling
+      consecutiveFailures.current++;
     }
   }, []);
 
@@ -57,7 +60,7 @@ export function NotificationBell() {
       const payload = data.data ?? data;
       setNotifications(Array.isArray(payload) ? payload : []);
     } catch {
-      // Silently ignore
+      console.warn("Failed to fetch notifications");
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +75,7 @@ export function NotificationBell() {
         );
         setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch {
-        // Silently ignore
+        console.warn("Failed to mark notification as read");
       }
     },
     []
@@ -84,15 +87,23 @@ export function NotificationBell() {
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
     } catch {
-      // Silently ignore
+      console.warn("Failed to mark all notifications as read");
     }
   }, []);
 
-  // Poll unread count every 30 seconds
+  // Poll unread count with exponential backoff on failure
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30_000);
-    return () => clearInterval(interval);
+    const poll = () => {
+      // Backoff: 30s, 60s, 120s, 240s, max 300s
+      const delay = Math.min(30_000 * Math.pow(2, consecutiveFailures.current), 300_000);
+      return setTimeout(async () => {
+        await fetchUnreadCount();
+        timerRef = poll();
+      }, delay);
+    };
+    let timerRef = poll();
+    return () => clearTimeout(timerRef);
   }, [fetchUnreadCount]);
 
   return (

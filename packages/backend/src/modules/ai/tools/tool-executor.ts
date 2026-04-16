@@ -64,6 +64,14 @@ export async function executeTool(
 // Tool implementations
 // ---------------------------------------------------------------------------
 
+function parseAndValidateDate(value: unknown, fieldName: string): Date {
+  const d = new Date(value as string);
+  if (isNaN(d.getTime())) {
+    throw new Error(`Invalid ${fieldName}: ${value}`);
+  }
+  return d;
+}
+
 async function queryAttendance(
   input: Record<string, any>,
   prisma: PrismaService,
@@ -73,8 +81,8 @@ async function queryAttendance(
 
   const where: Record<string, any> = {
     date: {
-      gte: new Date(input.startDate),
-      lte: new Date(input.endDate),
+      gte: parseAndValidateDate(input.startDate, 'startDate'),
+      lte: parseAndValidateDate(input.endDate, 'endDate'),
     },
   };
   if (branchId) where.branchId = branchId;
@@ -152,8 +160,8 @@ async function aggregateStats(
   prisma: PrismaService,
   branchId?: string,
 ) {
-  const startDate = new Date(input.startDate);
-  const endDate = new Date(input.endDate);
+  const startDate = parseAndValidateDate(input.startDate, 'startDate');
+  const endDate = parseAndValidateDate(input.endDate, 'endDate');
 
   const where: Record<string, any> = {
     date: { gte: startDate, lte: endDate },
@@ -161,16 +169,12 @@ async function aggregateStats(
   if (branchId) where.branchId = branchId;
 
   if (input.metric === 'attendance_rate') {
-    const total = await prisma.attendance.count({ where });
-    const onTime = await prisma.attendance.count({
-      where: { ...where, status: 'ON_TIME' },
-    });
-    const late = await prisma.attendance.count({
-      where: { ...where, status: 'LATE' },
-    });
-    const absent = await prisma.attendance.count({
-      where: { ...where, status: 'ABSENT' },
-    });
+    const [total, onTime, late, absent] = await Promise.all([
+      prisma.attendance.count({ where }),
+      prisma.attendance.count({ where: { ...where, status: 'ON_TIME' } }),
+      prisma.attendance.count({ where: { ...where, status: 'LATE' } }),
+      prisma.attendance.count({ where: { ...where, status: 'ABSENT' } }),
+    ]);
     return {
       metric: 'attendance_rate',
       total,

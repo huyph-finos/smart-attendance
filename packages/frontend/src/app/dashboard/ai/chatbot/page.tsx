@@ -83,6 +83,40 @@ const examplePrompts = [
 /*  Simple markdown renderer                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Parse inline markdown (bold, italic, code) into React elements.
+ * No dangerouslySetInnerHTML — immune to XSS.
+ */
+function parseInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  // Match **bold**, *italic*, `code` — non-greedy, no nesting
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    if (match[1] !== undefined) {
+      nodes.push(<strong key={`${keyPrefix}-b-${match.index}`}>{match[1]}</strong>);
+    } else if (match[2] !== undefined) {
+      nodes.push(<em key={`${keyPrefix}-i-${match.index}`}>{match[2]}</em>);
+    } else if (match[3] !== undefined) {
+      nodes.push(
+        <code key={`${keyPrefix}-c-${match.index}`} className="rounded bg-background px-1 py-0.5 text-xs font-mono">
+          {match[3]}
+        </code>
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes;
+}
+
 function renderMarkdown(text: string) {
   if (typeof text !== "string") text = String(text ?? "");
   const lines = text.split("\n");
@@ -121,29 +155,39 @@ function renderMarkdown(text: string) {
       continue;
     }
 
-    let escaped = line
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+    // Headings
+    const h1 = line.match(/^# (.*)/);
+    if (h1) {
+      result.push(<p key={`line-${i}`} className="font-bold text-lg leading-relaxed">{parseInline(h1[1], `${i}`)}</p>);
+      continue;
+    }
+    const h2 = line.match(/^## (.*)/);
+    if (h2) {
+      result.push(<p key={`line-${i}`} className="font-semibold text-base leading-relaxed">{parseInline(h2[1], `${i}`)}</p>);
+      continue;
+    }
+    const h3 = line.match(/^### (.*)/);
+    if (h3) {
+      result.push(<p key={`line-${i}`} className="font-semibold text-sm leading-relaxed">{parseInline(h3[1], `${i}`)}</p>);
+      continue;
+    }
 
-    let html = escaped
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>")
-      .replace(/`([^`]+)`/g, '<code class="rounded bg-background px-1 py-0.5 text-xs font-mono">$1</code>')
-      .replace(/^### (.*)/, '<span class="font-semibold text-sm">$1</span>')
-      .replace(/^## (.*)/, '<span class="font-semibold text-base">$1</span>')
-      .replace(/^# (.*)/, '<span class="font-bold text-lg">$1</span>')
-      .replace(/^- (.*)/, "&#8226; $1")
-      .replace(/^(\d+)\. (.*)/, "$1. $2");
+    // Bullet list
+    const bullet = line.match(/^- (.*)/);
+    if (bullet) {
+      result.push(<p key={`line-${i}`} className="leading-relaxed">{"\u2022 "}{parseInline(bullet[1], `${i}`)}</p>);
+      continue;
+    }
 
-    result.push(
-      <p
-        key={`line-${i}`}
-        className="leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
+    // Numbered list
+    const numbered = line.match(/^(\d+)\. (.*)/);
+    if (numbered) {
+      result.push(<p key={`line-${i}`} className="leading-relaxed">{numbered[1]}. {parseInline(numbered[2], `${i}`)}</p>);
+      continue;
+    }
+
+    // Regular paragraph
+    result.push(<p key={`line-${i}`} className="leading-relaxed">{parseInline(line, `${i}`)}</p>);
   }
 
   return result;

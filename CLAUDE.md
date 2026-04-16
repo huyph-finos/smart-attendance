@@ -99,6 +99,19 @@ WiFi BSSID must match branch WiFi configs **before** scoring begins. If no WiFi 
 - Branch model has `allowedIpRanges: String[]` for IP verification (seeded with localhost ranges)
 - Frontend disables check-in button until valid WiFi is selected; shows warning message
 
+## Security & Architecture Hardening (2026-04-17)
+- **Atomic check-in/check-out**: Prisma `$transaction` prevents duplicate attendance from race conditions
+- **XSS-safe markdown**: Replaced `dangerouslySetInnerHTML` with React element rendering (no HTML injection possible)
+- **Refresh token safety**: Generate new tokens BEFORE deleting old — no logout on generation failure
+- **AI tool validation**: `parseAndValidateDate()` validates all date inputs from Gemini function calls
+- **AI JSON safety**: `JSON.parse` wrapped in try-catch in agentic loop — no crash on malformed tool output
+- **Token refresh race fix**: Queued requests reject properly on refresh failure (no `Bearer null`)
+- **JWT expiry check**: `isTokenExpired()` / `getTokenTTL()` decode JWT client-side for proactive refresh
+- **Strict TypeScript**: Backend `noImplicitAny: true`, `strictBindCallApply: true`, `forceConsistentCasingInFileNames: true`
+- **CI enforced**: Removed `continue-on-error` on lint, build, and security audit steps
+- **Dependency fix**: `pnpm.overrides` pins `tar >= 7.5.11` (fixes 6 HIGH vulnerabilities)
+- **Seed safety**: Replaced `$executeRawUnsafe('TRUNCATE...')` with safe `deleteMany()` cascade
+
 ## Performance Optimizations (2026-04-17)
 - **helmet** + **compression** middleware in `main.ts`
 - **JWT Redis caching**: user profile cached 15min, DB hit only on cache miss
@@ -122,4 +135,4 @@ Comprehensive frontend-backend logic audit — 35 bugs fixed across 18 files:
 - **AI insights**: `result.content` → `result.response`
 - **AI rate limit (backend)**: Redis TTL lost on increment — permanent user lockout
 - **Offline sync**: Wrong URL, no auth header, wrong body shape
-- **XSS**: HTML escaping in AI markdown renderer (`dangerouslySetInnerHTML`)
+- **XSS**: HTML escaping in AI markdown renderer (`dangerouslySetInnerHTML`) — later replaced with React element rendering (Session 9)

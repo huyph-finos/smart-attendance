@@ -168,10 +168,18 @@ export class AiService {
           output: result,
         });
 
+        let parsedResult: object;
+        try {
+          parsedResult = JSON.parse(result);
+        } catch {
+          this.logger.warn(`Tool ${name} returned non-JSON result, wrapping as text`);
+          parsedResult = { text: result } as object;
+        }
+
         functionResponses.push({
           functionResponse: {
             name,
-            response: JSON.parse(result),
+            response: parsedResult,
           },
         });
       }

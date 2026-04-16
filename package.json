@@ -21,6 +21,9 @@
       "@prisma/client",
       "@prisma/engines",
       "@nestjs/core"
-    ]
+    ],
+    "overrides": {
+      "tar": ">=7.5.11"
+    }
   }
 }

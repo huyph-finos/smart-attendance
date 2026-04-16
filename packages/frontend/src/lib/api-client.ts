@@ -5,6 +5,7 @@ const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1',
   headers: {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   },
 });
 
@@ -54,6 +55,7 @@ apiClient.interceptors.response.use(
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then((token) => {
+        if (!token) return Promise.reject(error);
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return apiClient(originalRequest);
       });
@@ -65,6 +67,7 @@ apiClient.interceptors.response.use(
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
       isRefreshing = false;
+      processQueue(error, null);
       clearTokens();
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
@@ -82,8 +85,8 @@ apiClient.interceptors.response.use(
       const { accessToken, refreshToken: newRefreshToken } = payload;
       setTokens(accessToken, newRefreshToken);
 
-      originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       processQueue(null, accessToken);
+      originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
       return apiClient(originalRequest);
     } catch (refreshError) {

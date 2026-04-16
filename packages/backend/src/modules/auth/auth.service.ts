@@ -58,16 +58,17 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token is invalid or expired');
     }
 
-    // Delete the old refresh token (rotation)
-    await this.redis.del(redisKey);
-
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    return this.generateTokens(user);
+    // Generate new tokens BEFORE deleting old one — if generation fails, user keeps old token
+    const tokens = await this.generateTokens(user);
+    await this.redis.del(redisKey);
+
+    return tokens;
   }
 
   async logout(userId: string, tokenId: string): Promise<void> {

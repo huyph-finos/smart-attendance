@@ -14,13 +14,42 @@ export interface CheckInData {
   mood?: string | null;
 }
 
+export interface TodayAttendance {
+  id: string;
+  date: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  status: string;
+  totalHours: number | null;
+  overtimeHours: number | null;
+  fraudScore: number;
+  isVerified: boolean;
+  mood: string | null;
+  branch?: { name: string; code: string };
+  anomalies?: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    isResolved: boolean;
+  }>;
+}
+
+export interface CheckInResult {
+  attendance: TodayAttendance;
+  fraudCheck: {
+    score: number;
+    passed: boolean;
+    checks: Record<string, { score: number; detail: string }>;
+  };
+}
+
 export interface AttendanceState {
-  todayAttendance: any | null;
+  todayAttendance: TodayAttendance | null;
   isCheckingIn: boolean;
   isCheckingOut: boolean;
   fetchToday: () => Promise<void>;
-  checkIn: (data: CheckInData) => Promise<any>;
-  checkOut: (data: CheckInData) => Promise<any>;
+  checkIn: (data: CheckInData) => Promise<CheckInResult>;
+  checkOut: (data: CheckInData) => Promise<CheckInResult>;
 }
 
 export const useAttendanceStore = create<AttendanceState>((set) => ({

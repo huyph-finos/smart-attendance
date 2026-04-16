@@ -1,7 +1,5 @@
-import { PrismaClient, Role, AttendanceStatus, ShiftType, Branch, AnomalyType, AnomalySeverity, LeaveType } from '@prisma/client';
+import { PrismaClient, Prisma, Role, AttendanceStatus, ShiftType, AnomalyType, AnomalySeverity, LeaveType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-
-type BranchRecord = Branch;
 
 const prisma = new PrismaClient();
 
@@ -34,8 +32,21 @@ function generateWifiBssid(): string {
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Clean existing data
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE users, branches, departments, branch_wifi, branch_managers, attendances, user_devices, anomalies, leaves, shifts, shift_assignments, notifications, ai_conversations, daily_summaries CASCADE');
+  // Clean existing data (safe deletion in dependency order)
+  await prisma.aiConversation.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.dailySummary.deleteMany();
+  await prisma.anomaly.deleteMany();
+  await prisma.shiftAssignment.deleteMany();
+  await prisma.shift.deleteMany();
+  await prisma.leave.deleteMany();
+  await prisma.attendance.deleteMany();
+  await prisma.userDevice.deleteMany();
+  await prisma.branchManager.deleteMany();
+  await prisma.branchWifi.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.department.deleteMany();
+  await prisma.branch.deleteMany();
 
   // Create admin user
   const adminHash = await bcrypt.hash('admin123', 10);
@@ -52,7 +63,7 @@ async function main() {
   console.log(`✅ Admin created: ${admin.email}`);
 
   // Create 100 branches
-  const branches: BranchRecord[] = [];
+  const branches: Array<{ id: string; latitude: number; longitude: number; code: string; workStartTime: string; lateThreshold: number }> = [];
   let branchIndex = 0;
   for (const cityData of cities) {
     const numBranches = cityData.city === 'HCM' ? 30 : cityData.city === 'HN' ? 30 : cityData.city === 'DN' ? 20 : 10;
@@ -178,7 +189,7 @@ async function main() {
     // Process in batches per branch
     for (const branch of branches) {
       const branchUsers = allUsers.filter(u => u.branchId === branch.id);
-      const attendanceData: any[] = [];
+      const attendanceData: Prisma.AttendanceCreateManyInput[] = [];
 
       for (const user of branchUsers) {
         // 90% attendance rate
@@ -205,10 +216,10 @@ async function main() {
           status: isLateToday ? AttendanceStatus.LATE : AttendanceStatus.ON_TIME,
           totalHours: Math.round(workHours * 100) / 100,
           overtimeHours: Math.round(overtime * 100) / 100,
-          checkInLat: (branch as any).latitude + randomFloat(-0.001, 0.001),
-          checkInLng: (branch as any).longitude + randomFloat(-0.001, 0.001),
-          checkOutLat: (branch as any).latitude + randomFloat(-0.001, 0.001),
-          checkOutLng: (branch as any).longitude + randomFloat(-0.001, 0.001),
+          checkInLat: branch.latitude + randomFloat(-0.001, 0.001),
+          checkInLng: branch.longitude + randomFloat(-0.001, 0.001),
+          checkOutLat: branch.latitude + randomFloat(-0.001, 0.001),
+          checkOutLng: branch.longitude + randomFloat(-0.001, 0.001),
           fraudScore: Math.random() < 0.05 ? Math.floor(Math.random() * 40) + 20 : Math.floor(Math.random() * 15),
           isVerified: true,
         });

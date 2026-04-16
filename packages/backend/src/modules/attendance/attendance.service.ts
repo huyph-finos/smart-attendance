@@ -61,15 +61,7 @@ export class AttendanceService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Check for duplicate check-in today
-    const existing = await this.prisma.attendance.findUnique({
-      where: { userId_date: { userId, date: today } },
-    });
-    if (existing) {
-      throw new ConflictException('Already checked in today');
-    }
-
-    // 2. Run anti-fraud checks
+    // 2. Run anti-fraud checks (before transaction to avoid holding DB lock)
     const fraudResult = await this.antiFraud.checkFraud(userId, branch.id, dto, clientIp);
 
     // 3. Block if fraud score too high
@@ -96,27 +88,36 @@ export class AttendanceService {
       ? haversineDistance(dto.latitude, dto.longitude, branch.latitude, branch.longitude)
       : null;
 
-    // 5. Create attendance record
-    const attendance = await this.prisma.attendance.create({
-      data: {
-        userId,
-        branchId: branch.id,
-        date: today,
-        checkInTime,
-        status,
-        checkInLat: dto.latitude ?? null,
-        checkInLng: dto.longitude ?? null,
-        checkInWifiBssid: dto.wifiBssid ?? null,
-        checkInDeviceId: dto.deviceFingerprint,
-        checkInDistance: distance != null ? Math.round(distance) : null,
-        fraudScore: fraudResult.score,
-        isVerified: fraudResult.score <= 50,
-        verificationNote: this.buildVerificationNote(fraudResult),
-        mood: dto.mood ?? null,
-      },
-      include: {
-        branch: { select: { name: true, code: true } },
-      },
+    // 5. Create attendance record atomically (prevents duplicate check-ins)
+    const attendance = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.attendance.findUnique({
+        where: { userId_date: { userId, date: today } },
+      });
+      if (existing) {
+        throw new ConflictException('Already checked in today');
+      }
+
+      return tx.attendance.create({
+        data: {
+          userId,
+          branchId: branch.id,
+          date: today,
+          checkInTime,
+          status,
+          checkInLat: dto.latitude ?? null,
+          checkInLng: dto.longitude ?? null,
+          checkInWifiBssid: dto.wifiBssid ?? null,
+          checkInDeviceId: dto.deviceFingerprint,
+          checkInDistance: distance != null ? Math.round(distance) : null,
+          fraudScore: fraudResult.score,
+          isVerified: fraudResult.score <= 50,
+          verificationNote: this.buildVerificationNote(fraudResult),
+          mood: dto.mood ?? null,
+        },
+        include: {
+          branch: { select: { name: true, code: true } },
+        },
+      });
     });
 
     // 6. Create anomaly records if fraud score warrants it
@@ -157,23 +158,23 @@ export class AttendanceService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Find today's attendance
-    const attendance = await this.prisma.attendance.findUnique({
+    // 1. Find today's attendance (read outside transaction for fraud check)
+    const attendanceCheck = await this.prisma.attendance.findUnique({
       where: { userId_date: { userId, date: today } },
       include: { branch: true },
     });
 
-    if (!attendance) {
+    if (!attendanceCheck) {
       throw new NotFoundException('No check-in found for today');
     }
-    if (attendance.checkOutTime) {
+    if (attendanceCheck.checkOutTime) {
       throw new ConflictException('Already checked out today');
     }
 
     // 2. Run anti-fraud (lighter check for checkout)
     const fraudResult = await this.antiFraud.checkFraud(
       userId,
-      attendance.branchId,
+      attendanceCheck.branchId,
       dto,
       clientIp,
     );
@@ -189,30 +190,39 @@ export class AttendanceService {
 
     // 3. Calculate hours worked
     const checkOutTime = new Date();
-    const totalHours = attendance.checkInTime
-      ? calculateWorkHours(attendance.checkInTime, checkOutTime)
+    const totalHours = attendanceCheck.checkInTime
+      ? calculateWorkHours(attendanceCheck.checkInTime, checkOutTime)
       : 0;
     const overtimeHours = calculateOvertime(totalHours);
 
-    // 4. Update attendance record
-    const updated = await this.prisma.attendance.update({
-      where: { id: attendance.id },
-      data: {
-        checkOutTime,
-        checkOutLat: dto.latitude ?? null,
-        checkOutLng: dto.longitude ?? null,
-        checkOutWifiBssid: dto.wifiBssid ?? null,
-        checkOutDeviceId: dto.deviceFingerprint,
-        totalHours,
-        overtimeHours,
-        // Update fraud score to average of check-in and check-out
-        fraudScore: Math.round(
-          ((attendance.fraudScore + fraudResult.score) / 2) * 100,
-        ) / 100,
-      },
-      include: {
-        branch: { select: { name: true, code: true } },
-      },
+    // 4. Update attendance record atomically (prevents double check-out)
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.attendance.findUnique({
+        where: { id: attendanceCheck.id },
+        select: { checkOutTime: true },
+      });
+      if (current?.checkOutTime) {
+        throw new ConflictException('Already checked out today');
+      }
+
+      return tx.attendance.update({
+        where: { id: attendanceCheck.id },
+        data: {
+          checkOutTime,
+          checkOutLat: dto.latitude ?? null,
+          checkOutLng: dto.longitude ?? null,
+          checkOutWifiBssid: dto.wifiBssid ?? null,
+          checkOutDeviceId: dto.deviceFingerprint,
+          totalHours,
+          overtimeHours,
+          fraudScore: Math.round(
+            ((attendanceCheck.fraudScore + fraudResult.score) / 2) * 100,
+          ) / 100,
+        },
+        include: {
+          branch: { select: { name: true, code: true } },
+        },
+      });
     });
 
     // 5. Create anomaly records if check-out fraud score is high
@@ -221,7 +231,7 @@ export class AttendanceService {
       await Promise.all(
         anomalies.map((anomaly) =>
           this.antiFraud.createAnomaly(
-            attendance.id,
+            updated.id,
             anomaly.type,
             anomaly.severity,
             anomaly.description,
@@ -233,7 +243,7 @@ export class AttendanceService {
 
     // Update cache + invalidate dashboard
     await this.cacheAttendance(userId, updated);
-    this.invalidateDashboardCache(attendance.branchId);
+    this.invalidateDashboardCache(updated.branchId);
 
     return {
       attendance: updated,

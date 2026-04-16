@@ -29,5 +29,48 @@ export function clearTokens(): void {
 
 export function isAuthenticated(): boolean {
   if (!isBrowser()) return false;
-  return getAccessToken() !== null;
+  const token = getAccessToken();
+  if (!token) return false;
+  // Check if token is expired by decoding JWT payload
+  return !isTokenExpired(token);
+}
+
+/**
+ * Decode JWT payload and check expiration.
+ * Returns true if token is expired or malformed.
+ */
+export function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return false;
+    // Add 30s buffer so we refresh before actual expiry
+    return Date.now() >= (payload.exp * 1000) - 30_000;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Get seconds until token expires. Returns 0 if expired or invalid.
+ */
+/**
+ * Get seconds until token expires (with same 30s buffer as isTokenExpired).
+ * Returns 0 if expired or invalid.
+ */
+export function getTokenTTL(): number {
+  const token = getAccessToken();
+  if (!token) return 0;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return 0;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return Infinity;
+    // Same 30s buffer as isTokenExpired for consistency
+    const remaining = Math.floor((payload.exp * 1000 - 30_000 - Date.now()) / 1000);
+    return Math.max(0, remaining);
+  } catch {
+    return 0;
+  }
 }
