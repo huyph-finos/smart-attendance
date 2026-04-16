@@ -49,7 +49,8 @@ export default function CreateBranchPage() {
         payload.lateThreshold = parseInt(form.lateThreshold, 10);
 
       const { data: response } = await apiClient.post("/branches", payload);
-      const branchId = response.data?.id;
+      const created = response.data ?? response;
+      const branchId = created?.id;
       router.push(
         branchId ? `/dashboard/branches/${branchId}` : "/dashboard/branches"
       );

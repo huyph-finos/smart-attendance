@@ -49,7 +49,8 @@ export default function CreateEmployeePage() {
         const { data: response } = await apiClient.get("/branches", {
           params: { limit: 100 },
         });
-        setBranches(response.data?.data ?? []);
+        const brResult = response.data ?? response;
+        setBranches(brResult.data ?? brResult ?? []);
       } catch {
         // silent
       }

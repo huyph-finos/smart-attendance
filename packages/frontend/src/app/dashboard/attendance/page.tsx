@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAttendanceStore, type CheckInData } from "@/stores/attendance.store";
+import { useAuthStore } from "@/stores/auth.store";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useDeviceFingerprint } from "@/hooks/use-device-fingerprint";
 import { useWifi } from "@/hooks/use-wifi";
+import apiClient from "@/lib/api-client";
 import {
   Clock,
   MapPin,
@@ -21,15 +23,20 @@ import {
   Loader2,
   RefreshCw,
   Shield,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const moods = [
-  { emoji: "\u{1F60A}", label: "Great", value: "GREAT" },
-  { emoji: "\u{1F610}", label: "Okay", value: "OKAY" },
-  { emoji: "\u{1F614}", label: "Sad", value: "SAD" },
-  { emoji: "\u{1F624}", label: "Frustrated", value: "FRUSTRATED" },
-  { emoji: "\u{1F912}", label: "Sick", value: "SICK" },
+  { emoji: "\uD83D\uDE0A", label: "Great", value: "GREAT", bg: "bg-green-50 dark:bg-green-950", ring: "ring-green-400", text: "text-green-700 dark:text-green-400" },
+  { emoji: "\uD83D\uDE10", label: "Okay", value: "OKAY", bg: "bg-blue-50 dark:bg-blue-950", ring: "ring-blue-400", text: "text-blue-700 dark:text-blue-400" },
+  { emoji: "\uD83D\uDE14", label: "Sad", value: "SAD", bg: "bg-purple-50 dark:bg-purple-950", ring: "ring-purple-400", text: "text-purple-700 dark:text-purple-400" },
+  { emoji: "\uD83D\uDE24", label: "Frustrated", value: "FRUSTRATED", bg: "bg-orange-50 dark:bg-orange-950", ring: "ring-orange-400", text: "text-orange-700 dark:text-orange-400" },
+  { emoji: "\uD83E\uDD12", label: "Sick", value: "SICK", bg: "bg-red-50 dark:bg-red-950", ring: "ring-red-400", text: "text-red-700 dark:text-red-400" },
+];
+
+const vietnameseDays = [
+  "Chu Nhat", "Thu Hai", "Thu Ba", "Thu Tu", "Thu Nam", "Thu Sau", "Thu Bay",
 ];
 
 export default function AttendancePage() {
@@ -42,6 +49,7 @@ export default function AttendancePage() {
     checkOut,
   } = useAttendanceStore();
 
+  const { user } = useAuthStore();
   const geo = useGeolocation();
   const device = useDeviceFingerprint();
   const wifi = useWifi();
@@ -50,12 +58,41 @@ export default function AttendancePage() {
   const [error, setError] = useState<string | null>(null);
   const [fraudResult, setFraudResult] = useState<any>(null);
   const [loadingToday, setLoadingToday] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [quickStats, setQuickStats] = useState<{
+    totalEmployees: number;
+    checkedInToday: number;
+    branchName?: string;
+  } | null>(null);
+
+  // Real-time clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetchToday()
       .catch(() => {})
       .finally(() => setLoadingToday(false));
   }, [fetchToday]);
+
+  // Quick stats for managers/admins
+  const isAdminOrManager = user?.role === "ADMIN" || user?.role === "MANAGER";
+  useEffect(() => {
+    if (!isAdminOrManager) return;
+    apiClient
+      .get("/dashboard/overview")
+      .then((res) => {
+        const data = res.data?.data ?? res.data;
+        setQuickStats({
+          totalEmployees: data.totalEmployees ?? 0,
+          checkedInToday: data.checkedInToday ?? 0,
+          branchName: data.branchName,
+        });
+      })
+      .catch(() => {});
+  }, [isAdminOrManager]);
 
   const hasCheckedIn = !!todayAttendance?.checkInTime;
   const hasCheckedOut = !!todayAttendance?.checkOutTime;
@@ -131,22 +168,47 @@ export default function AttendancePage() {
     );
   }
 
+  const timeString = currentTime.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const dayOfWeek = vietnameseDays[currentTime.getDay()];
+  const dateString = `${dayOfWeek}, ${String(currentTime.getDate()).padStart(2, "0")}/${String(currentTime.getMonth() + 1).padStart(2, "0")}/${currentTime.getFullYear()}`;
+
   return (
     <div className="mx-auto max-w-lg space-y-4">
+      {/* Quick Stats Banner for Managers/Admins */}
+      {isAdminOrManager && quickStats && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 dark:border-blue-800 dark:bg-blue-950">
+          <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            Hom nay:{" "}
+            <span className="font-semibold">
+              {quickStats.checkedInToday}/{quickStats.totalEmployees}
+            </span>{" "}
+            nhan vien da cham cong
+            {quickStats.branchName ? ` tai ${quickStats.branchName}` : ""}
+          </p>
+        </div>
+      )}
+
+      {/* Real-time Clock Widget */}
+      <Card className="overflow-hidden">
+        <CardContent className="flex flex-col items-center gap-1 p-6 pb-4">
+          <p className="font-mono text-5xl font-bold tracking-wider tabular-nums">
+            {timeString}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {dateString}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Main check-in/out card */}
       <Card>
         <CardContent className="flex flex-col items-center gap-6 p-6">
-          {/* Current time display */}
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-          </div>
 
           {/* Status */}
           <div className="text-center">
@@ -162,6 +224,11 @@ export default function AttendancePage() {
                 </Badge>
                 <p className="text-sm text-muted-foreground">
                   Since {formatTime(todayAttendance?.checkInTime)}
+                  {(() => {
+                    const moodValue = todayAttendance?.mood ?? selectedMood;
+                    const moodItem = moods.find((m) => m.value === moodValue);
+                    return moodItem ? ` ${moodItem.emoji}` : "";
+                  })()}
                 </p>
               </div>
             )}
@@ -170,6 +237,11 @@ export default function AttendancePage() {
                 <Badge variant="secondary">Checked Out</Badge>
                 <p className="text-sm text-muted-foreground">
                   At {formatTime(todayAttendance?.checkOutTime)}
+                  {(() => {
+                    const moodValue = todayAttendance?.mood ?? selectedMood;
+                    const moodItem = moods.find((m) => m.value === moodValue);
+                    return moodItem ? ` ${moodItem.emoji}` : "";
+                  })()}
                 </p>
               </div>
             )}
@@ -247,7 +319,7 @@ export default function AttendancePage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">
-              How are you feeling today?
+              Ban cam thay the nao hom nay?
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -257,14 +329,24 @@ export default function AttendancePage() {
                   key={mood.value}
                   onClick={() => setSelectedMood(mood.value)}
                   className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg p-2 text-center transition-all",
+                    "flex flex-1 flex-col items-center gap-1.5 rounded-xl p-3 text-center transition-all duration-200",
                     selectedMood === mood.value
-                      ? "bg-primary/10 ring-2 ring-primary/30"
-                      : "hover:bg-muted"
+                      ? `${mood.bg} ring-2 ${mood.ring} scale-110 shadow-md`
+                      : "hover:bg-muted hover:scale-105"
                   )}
                 >
-                  <span className="text-2xl">{mood.emoji}</span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className={cn(
+                    "text-3xl transition-transform duration-200",
+                    selectedMood === mood.value && "animate-bounce"
+                  )}>
+                    {mood.emoji}
+                  </span>
+                  <span className={cn(
+                    "text-[10px] font-medium",
+                    selectedMood === mood.value
+                      ? mood.text
+                      : "text-muted-foreground"
+                  )}>
                     {mood.label}
                   </span>
                 </button>
@@ -434,6 +516,26 @@ export default function AttendancePage() {
                 </p>
               </div>
             </div>
+            {/* Mood display */}
+            {(todayAttendance.mood || selectedMood) && (
+              <>
+                <Separator className="my-2" />
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">Tam trang:</span>
+                  {(() => {
+                    const moodValue = todayAttendance.mood ?? selectedMood;
+                    const moodItem = moods.find((m) => m.value === moodValue);
+                    if (!moodItem) return null;
+                    return (
+                      <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium", moodItem.bg, moodItem.text)}>
+                        <span className="text-base">{moodItem.emoji}</span>
+                        {moodItem.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

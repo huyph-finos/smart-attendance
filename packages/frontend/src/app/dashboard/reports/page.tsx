@@ -83,7 +83,8 @@ export default function ReportsPage() {
         const { data: response } = await apiClient.get("/branches", {
           params: { limit: 100 },
         });
-        setBranches(response.data?.data ?? []);
+        const brResult = response.data ?? response;
+        setBranches(brResult.data ?? brResult ?? []);
       } catch {
         // silent
       }
@@ -111,10 +112,12 @@ export default function ReportsPage() {
       ]);
 
       if (reportRes.status === "fulfilled") {
-        setReportData(reportRes.value.data.data?.data ?? reportRes.value.data.data ?? []);
+        const reportResult = reportRes.value.data.data ?? reportRes.value.data;
+        setReportData(reportResult?.data ?? reportResult ?? []);
       }
       if (statsRes.status === "fulfilled") {
-        setStats(statsRes.value.data.data ?? null);
+        const statsResult = statsRes.value.data.data ?? statsRes.value.data;
+        setStats(statsResult ?? null);
       }
     } catch {
       setReportData([]);

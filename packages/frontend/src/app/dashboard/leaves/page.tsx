@@ -163,7 +163,7 @@ export default function LeavesPage() {
       const { data: response } = await apiClient.get("/leaves", {
         params: { page, limit },
       });
-      const result: PaginatedResponse = response.data;
+      const result: PaginatedResponse = response.data ?? response;
       setLeaves(result.data ?? []);
       setTotal(result.meta?.total ?? 0);
     } catch {
@@ -180,7 +180,7 @@ export default function LeavesPage() {
       const { data: response } = await apiClient.get("/leaves/pending", {
         params: { page: pendingPage, limit },
       });
-      const result: PaginatedResponse = response.data;
+      const result: PaginatedResponse = response.data ?? response;
       setPendingLeaves(result.data ?? []);
       setPendingTotal(result.meta?.total ?? 0);
     } catch {

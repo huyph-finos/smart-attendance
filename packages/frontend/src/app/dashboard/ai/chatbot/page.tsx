@@ -143,11 +143,12 @@ export default function ChatbotPage() {
         })),
       });
 
+      const result = response.data ?? response;
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: response.data?.content ?? response.data?.message ?? "No response received.",
-        toolCalls: response.data?.toolCalls ?? [],
+        content: result?.content ?? result?.message ?? "No response received.",
+        toolCalls: result?.toolCalls ?? [],
         timestamp: new Date(),
       };
 

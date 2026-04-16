@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/stores/auth.store";
 import apiClient from "@/lib/api-client";
-import { Users, Clock, AlertTriangle, TrendingUp } from "lucide-react";
+import { Users, Clock, AlertTriangle, TrendingUp, Trophy } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -38,29 +38,50 @@ interface RecentCheckIn {
   status: string;
 }
 
+interface BranchHeatmapItem {
+  branchId: string;
+  branchName: string;
+  totalEmployees: number;
+  checkedIn: number;
+  onTime: number;
+  late: number;
+  attendanceRate: number;
+}
+
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [recentCheckIns, setRecentCheckIns] = useState<RecentCheckIn[]>([]);
+  const [branchLeaderboard, setBranchLeaderboard] = useState<BranchHeatmapItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [overviewRes, trendsRes] = await Promise.allSettled([
+        const [overviewRes, trendsRes, heatmapRes] = await Promise.allSettled([
           apiClient.get("/dashboard/overview"),
           apiClient.get("/dashboard/trends"),
+          apiClient.get("/dashboard/branch-heatmap"),
         ]);
 
         if (overviewRes.status === "fulfilled") {
-          setOverview(overviewRes.value.data.data);
+          const overviewData = overviewRes.value.data.data ?? overviewRes.value.data;
+          setOverview(overviewData);
           setRecentCheckIns(
-            overviewRes.value.data.data?.recentCheckIns ?? []
+            overviewData?.recentCheckIns ?? []
           );
         }
         if (trendsRes.status === "fulfilled") {
-          setTrends(trendsRes.value.data.data ?? []);
+          const trendsData = trendsRes.value.data.data ?? trendsRes.value.data;
+          setTrends(trendsData ?? []);
+        }
+        if (heatmapRes.status === "fulfilled") {
+          const heatmapData = heatmapRes.value.data.data ?? heatmapRes.value.data;
+          const sorted = (heatmapData ?? [])
+            .sort((a: BranchHeatmapItem, b: BranchHeatmapItem) => b.attendanceRate - a.attendanceRate)
+            .slice(0, 10);
+          setBranchLeaderboard(sorted);
         }
       } catch {
         // Silently fail - show empty state
@@ -273,6 +294,83 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Branch Leaderboard */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            Bang Xep Hang Chi Nhanh
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : branchLeaderboard.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No branch data available
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-3 font-medium w-10">#</th>
+                    <th className="pb-2 pr-3 font-medium">Chi Nhanh</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Ty Le</th>
+                    <th className="pb-2 pr-3 font-medium text-right">NV</th>
+                    <th className="pb-2 font-medium text-right">Dung gio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branchLeaderboard.map((branch, index) => {
+                    const rank = index + 1;
+                    const rankDisplay =
+                      rank === 1 ? "\uD83E\uDD47" : rank === 2 ? "\uD83E\uDD48" : rank === 3 ? "\uD83E\uDD49" : String(rank);
+                    const rankColor =
+                      rank === 1
+                        ? "text-yellow-500 font-bold"
+                        : rank === 2
+                        ? "text-gray-400 font-bold"
+                        : rank === 3
+                        ? "text-amber-600 font-bold"
+                        : "text-muted-foreground";
+
+                    return (
+                      <tr
+                        key={branch.branchId}
+                        className={`border-b last:border-0 ${
+                          rank <= 3 ? "bg-muted/30" : ""
+                        }`}
+                      >
+                        <td className={`py-2.5 pr-3 ${rankColor}`}>
+                          {rankDisplay}
+                        </td>
+                        <td className={`py-2.5 pr-3 font-medium ${rank <= 3 ? rankColor.split(" ")[0] : ""}`}>
+                          {branch.branchName}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right font-semibold">
+                          {branch.attendanceRate.toFixed(1)}%
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                          {branch.checkedIn}/{branch.totalEmployees}
+                        </td>
+                        <td className="py-2.5 text-right text-muted-foreground">
+                          {branch.onTime}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

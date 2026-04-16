@@ -104,7 +104,8 @@ export default function EmployeesPage() {
         const { data: response } = await apiClient.get("/branches", {
           params: { limit: 100 },
         });
-        setBranches(response.data?.data ?? []);
+        const brResult = response.data ?? response;
+        setBranches(brResult.data ?? brResult ?? []);
       } catch {
         // silent
       }
@@ -121,7 +122,7 @@ export default function EmployeesPage() {
       if (branchFilter !== "ALL") params.branchId = branchFilter;
 
       const { data: response } = await apiClient.get("/users", { params });
-      const result = response.data;
+      const result = response.data ?? response;
       setEmployees(result.data ?? []);
       setTotal(result.meta?.total ?? 0);
     } catch {

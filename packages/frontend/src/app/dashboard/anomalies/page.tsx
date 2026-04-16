@@ -162,7 +162,7 @@ export default function AnomaliesPage() {
       if (resolvedFilter === "RESOLVED") params.isResolved = "true" as unknown as string;
 
       const { data: response } = await apiClient.get("/anomalies", { params });
-      const result: PaginatedResponse = response.data;
+      const result: PaginatedResponse = response.data ?? response;
       setAnomalies(result.data ?? []);
       setTotal(result.meta?.total ?? 0);
     } catch {
@@ -185,11 +185,15 @@ export default function AnomaliesPage() {
           params: { limit: 1, severity: "HIGH" },
         }),
       ]);
+      const allResult = allRes.data.data ?? allRes.data;
+      const unresolvedResult = unresolvedRes.data.data ?? unresolvedRes.data;
+      const criticalResult = criticalRes.data.data ?? criticalRes.data;
+      const highResult = highRes.data.data ?? highRes.data;
       setStats({
-        total: allRes.data.data?.meta?.total ?? 0,
-        unresolved: unresolvedRes.data.data?.meta?.total ?? 0,
-        critical: criticalRes.data.data?.meta?.total ?? 0,
-        high: highRes.data.data?.meta?.total ?? 0,
+        total: allResult?.meta?.total ?? 0,
+        unresolved: unresolvedResult?.meta?.total ?? 0,
+        critical: criticalResult?.meta?.total ?? 0,
+        high: highResult?.meta?.total ?? 0,
       });
     } catch {
       // silent

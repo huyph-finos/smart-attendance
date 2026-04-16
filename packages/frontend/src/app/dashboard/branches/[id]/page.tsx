@@ -111,7 +111,7 @@ export default function BranchDetailPage() {
     setLoading(true);
     try {
       const { data: response } = await apiClient.get(`/branches/${branchId}`);
-      const data = response.data;
+      const data = response.data ?? response;
       setBranch(data);
     } catch {
       // silent
@@ -127,7 +127,8 @@ export default function BranchDetailPage() {
         `/branches/${branchId}/employees`,
         { params: { limit: 50 } }
       );
-      setEmployees(response.data?.data ?? []);
+      const empResult = response.data ?? response;
+      setEmployees(empResult.data ?? empResult ?? []);
     } catch {
       setEmployees([]);
     } finally {

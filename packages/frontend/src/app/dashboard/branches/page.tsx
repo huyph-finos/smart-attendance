@@ -67,7 +67,7 @@ export default function BranchesPage() {
       if (search) params.search = search;
 
       const { data: response } = await apiClient.get("/branches", { params });
-      const result: PaginatedResponse = response.data;
+      const result: PaginatedResponse = response.data ?? response;
       setBranches(result.data ?? []);
       setTotal(result.meta?.total ?? 0);
     } catch {

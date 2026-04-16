@@ -30,7 +30,7 @@ export const useAttendanceStore = create<AttendanceState>((set) => ({
   fetchToday: async () => {
     try {
       const { data: response } = await apiClient.get('/attendance/today');
-      set({ todayAttendance: response.data });
+      set({ todayAttendance: response.data ?? response });
     } catch (error) {
       set({ todayAttendance: null });
       throw error;
@@ -44,8 +44,9 @@ export const useAttendanceStore = create<AttendanceState>((set) => ({
         '/attendance/check-in',
         data,
       );
-      set({ todayAttendance: response.data, isCheckingIn: false });
-      return response.data;
+      const result = response.data ?? response;
+      set({ todayAttendance: result, isCheckingIn: false });
+      return result;
     } catch (error) {
       set({ isCheckingIn: false });
       throw error;
@@ -59,8 +60,9 @@ export const useAttendanceStore = create<AttendanceState>((set) => ({
         '/attendance/check-out',
         data,
       );
-      set({ todayAttendance: response.data, isCheckingOut: false });
-      return response.data;
+      const result = response.data ?? response;
+      set({ todayAttendance: result, isCheckingOut: false });
+      return result;
     } catch (error) {
       set({ isCheckingOut: false });
       throw error;

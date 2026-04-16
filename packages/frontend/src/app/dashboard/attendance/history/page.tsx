@@ -37,9 +37,15 @@ interface AttendanceRecord {
 
 interface PaginatedResponse {
   data: AttendanceRecord[];
-  total: number;
-  page: number;
-  limit: number;
+  total?: number;
+  page?: number;
+  limit?: number;
+  meta?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 const statusOptions = [
@@ -137,9 +143,9 @@ export default function AttendanceHistoryPage() {
         params,
       });
 
-      const result: PaginatedResponse = response.data;
+      const result: PaginatedResponse = response.data ?? response;
       setRecords(result.data ?? []);
-      setTotal(result.total ?? 0);
+      setTotal(result.meta?.total ?? result.total ?? 0);
     } catch {
       setRecords([]);
     } finally {

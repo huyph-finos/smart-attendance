@@ -164,7 +164,7 @@ export default function EmployeeDetailPage() {
     setLoading(true);
     try {
       const { data: response } = await apiClient.get(`/users/${employeeId}`);
-      setEmployee(response.data);
+      setEmployee(response.data ?? response);
     } catch {
       // silent
     } finally {
@@ -181,7 +181,8 @@ export default function EmployeeDetailPage() {
       const { data: response } = await apiClient.get("/attendance/history", {
         params: { userId: employeeId, dateFrom, dateTo, limit: 7 },
       });
-      setAttendance(response.data?.data ?? []);
+      const attResult = response.data ?? response;
+      setAttendance(attResult.data ?? attResult ?? []);
     } catch {
       setAttendance([]);
     }
