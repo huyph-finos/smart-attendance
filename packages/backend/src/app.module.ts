@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -13,10 +15,18 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { LeavesModule } from './modules/leaves/leaves.module';
 import { AnomaliesModule } from './modules/anomalies/anomalies.module';
 import { ShiftsModule } from './modules/shifts/shifts.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000, // 1 minute
+        limit: 100, // 100 requests per minute per IP
+      },
+    ]),
     PrismaModule,
     RedisModule,
     AuthModule,
@@ -30,6 +40,13 @@ import { ShiftsModule } from './modules/shifts/shifts.module';
     LeavesModule,
     AnomaliesModule,
     ShiftsModule,
+    HealthModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

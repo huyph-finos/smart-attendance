@@ -30,98 +30,101 @@ export class ReportsService {
     reportDate.setHours(0, 0, 0, 0);
 
     const branchWhere: Prisma.BranchWhereInput = { isActive: true };
-    if (branchId) {
-      branchWhere.id = branchId;
+    if (branchId) branchWhere.id = branchId;
+
+    const attendanceWhere: Prisma.AttendanceWhereInput = { date: reportDate };
+    if (branchId) attendanceWhere.branchId = branchId;
+
+    // Batch all queries (was: N branches × 5 queries = 500 queries for 100 branches)
+    const [branches, employeeCounts, attendanceGroups, leaveCounts, avgHoursAgg, checkInRecords] =
+      await Promise.all([
+        this.prisma.branch.findMany({
+          where: branchWhere,
+          select: { id: true, name: true, code: true },
+        }),
+        this.prisma.user.groupBy({
+          by: ['branchId'],
+          where: { isActive: true, ...(branchId ? { branchId } : {}) },
+          _count: { id: true },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId', 'status'],
+          where: attendanceWhere,
+          _count: { id: true },
+        }),
+        this.prisma.leave.findMany({
+          where: {
+            ...(branchId ? { user: { branchId } } : {}),
+            isApproved: true,
+            startDate: { lte: reportDate },
+            endDate: { gte: reportDate },
+          },
+          select: { user: { select: { branchId: true } } },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId'],
+          where: { ...attendanceWhere, totalHours: { not: null } },
+          _avg: { totalHours: true },
+        }),
+        this.prisma.attendance.findMany({
+          where: { ...attendanceWhere, checkInTime: { not: null } },
+          select: { branchId: true, checkInTime: true },
+        }),
+      ]);
+
+    // Build lookup maps
+    const employeeMap = new Map(employeeCounts.map((e) => [e.branchId, e._count.id]));
+
+    const statusByBranch = new Map<string, Record<string, number>>();
+    for (const g of attendanceGroups) {
+      if (!statusByBranch.has(g.branchId)) statusByBranch.set(g.branchId, {});
+      statusByBranch.get(g.branchId)![g.status] = g._count.id;
     }
 
-    const branches = await this.prisma.branch.findMany({
-      where: branchWhere,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-      },
-    });
+    const leaveByBranch = new Map<string, number>();
+    for (const l of leaveCounts) {
+      const bid = l.user.branchId;
+      if (bid) leaveByBranch.set(bid, (leaveByBranch.get(bid) ?? 0) + 1);
+    }
 
-    const branchStats: BranchDailyStats[] = [];
+    const avgHoursMap = new Map(avgHoursAgg.map((a) => [a.branchId, a._avg.totalHours]));
 
-    for (const branch of branches) {
-      const totalEmployees = await this.prisma.user.count({
-        where: { branchId: branch.id, isActive: true },
-      });
+    const checkInByBranch = new Map<string, Date[]>();
+    for (const r of checkInRecords) {
+      if (!checkInByBranch.has(r.branchId)) checkInByBranch.set(r.branchId, []);
+      checkInByBranch.get(r.branchId)!.push(r.checkInTime!);
+    }
 
-      const attendanceGroups = await this.prisma.attendance.groupBy({
-        by: ['status'],
-        where: {
-          branchId: branch.id,
-          date: reportDate,
-        },
-        _count: { id: true },
-      });
-
-      const onLeaveCount = await this.prisma.leave.count({
-        where: {
-          user: { branchId: branch.id },
-          isApproved: true,
-          startDate: { lte: reportDate },
-          endDate: { gte: reportDate },
-        },
-      });
-
-      const avgAgg = await this.prisma.attendance.aggregate({
-        where: {
-          branchId: branch.id,
-          date: reportDate,
-          totalHours: { not: null },
-        },
-        _avg: { totalHours: true },
-      });
-
-      const statusMap: Record<string, number> = {};
-      for (const group of attendanceGroups) {
-        statusMap[group.status] = group._count.id;
-      }
-
+    const branchStats: BranchDailyStats[] = branches.map((branch) => {
+      const totalEmployees = employeeMap.get(branch.id) ?? 0;
+      const statusMap = statusByBranch.get(branch.id) ?? {};
       const present = (statusMap['ON_TIME'] ?? 0) + (statusMap['LATE'] ?? 0);
       const late = statusMap['LATE'] ?? 0;
-      const totalCheckedIn = present;
-      const absent = totalEmployees - totalCheckedIn - onLeaveCount;
-
-      // Compute average check-in time
-      const checkInRecords = await this.prisma.attendance.findMany({
-        where: {
-          branchId: branch.id,
-          date: reportDate,
-          checkInTime: { not: null },
-        },
-        select: { checkInTime: true },
-      });
+      const onLeave = leaveByBranch.get(branch.id) ?? 0;
+      const absent = Math.max(0, totalEmployees - present - onLeave);
+      const avgHours = avgHoursMap.get(branch.id);
 
       let avgCheckIn: string | null = null;
-      if (checkInRecords.length > 0) {
-        const totalMinutes = checkInRecords.reduce((sum, r) => {
-          const t = r.checkInTime!;
-          return sum + t.getHours() * 60 + t.getMinutes();
-        }, 0);
-        const avgMinutes = Math.round(totalMinutes / checkInRecords.length);
+      const times = checkInByBranch.get(branch.id);
+      if (times && times.length > 0) {
+        const totalMinutes = times.reduce((sum, t) => sum + t.getHours() * 60 + t.getMinutes(), 0);
+        const avgMinutes = Math.round(totalMinutes / times.length);
         const hours = Math.floor(avgMinutes / 60);
         const mins = avgMinutes % 60;
         avgCheckIn = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
       }
 
-      branchStats.push({
+      return {
         branchName: branch.name,
         totalEmployees,
         present,
         late,
-        absent: Math.max(0, absent),
-        onLeave: onLeaveCount,
+        absent,
+        onLeave,
         avgCheckIn,
-        avgHours: avgAgg._avg.totalHours
-          ? Math.round(avgAgg._avg.totalHours * 100) / 100
-          : null,
-      });
-    }
+        avgHours: avgHours ? Math.round(avgHours * 100) / 100 : null,
+      };
+    });
 
     return { date, branches: branchStats };
   }
@@ -138,74 +141,79 @@ export class ReportsService {
     sunday.setHours(23, 59, 59, 999);
 
     const branchWhere: Prisma.BranchWhereInput = { isActive: true };
-    if (branchId) {
-      branchWhere.id = branchId;
+    if (branchId) branchWhere.id = branchId;
+
+    const attendanceWhere: Prisma.AttendanceWhereInput = {
+      date: { gte: monday, lte: sunday },
+    };
+    if (branchId) attendanceWhere.branchId = branchId;
+
+    const [branches, employeeCounts, attendanceGroups, leaveCounts, avgHoursAgg] =
+      await Promise.all([
+        this.prisma.branch.findMany({
+          where: branchWhere,
+          select: { id: true, name: true, code: true },
+        }),
+        this.prisma.user.groupBy({
+          by: ['branchId'],
+          where: { isActive: true, ...(branchId ? { branchId } : {}) },
+          _count: { id: true },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId', 'status'],
+          where: attendanceWhere,
+          _count: { id: true },
+        }),
+        this.prisma.leave.findMany({
+          where: {
+            ...(branchId ? { user: { branchId } } : {}),
+            isApproved: true,
+            startDate: { lte: sunday },
+            endDate: { gte: monday },
+          },
+          select: { user: { select: { branchId: true } } },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId'],
+          where: { ...attendanceWhere, totalHours: { not: null } },
+          _avg: { totalHours: true },
+        }),
+      ]);
+
+    const employeeMap = new Map(employeeCounts.map((e) => [e.branchId, e._count.id]));
+    const statusByBranch = new Map<string, Record<string, number>>();
+    for (const g of attendanceGroups) {
+      if (!statusByBranch.has(g.branchId)) statusByBranch.set(g.branchId, {});
+      statusByBranch.get(g.branchId)![g.status] = g._count.id;
     }
+    const leaveByBranch = new Map<string, number>();
+    for (const l of leaveCounts) {
+      const bid = l.user.branchId;
+      if (bid) leaveByBranch.set(bid, (leaveByBranch.get(bid) ?? 0) + 1);
+    }
+    const avgHoursMap = new Map(avgHoursAgg.map((a) => [a.branchId, a._avg.totalHours]));
 
-    const branches = await this.prisma.branch.findMany({
-      where: branchWhere,
-      select: { id: true, name: true, code: true },
-    });
-
-    const weeklyStats: any[] = [];
-
-    for (const branch of branches) {
-      const totalEmployees = await this.prisma.user.count({
-        where: { branchId: branch.id, isActive: true },
-      });
-
-      const attendanceGroups = await this.prisma.attendance.groupBy({
-        by: ['status'],
-        where: {
-          branchId: branch.id,
-          date: { gte: monday, lte: sunday },
-        },
-        _count: { id: true },
-      });
-
-      const onLeaveCount = await this.prisma.leave.count({
-        where: {
-          user: { branchId: branch.id },
-          isApproved: true,
-          startDate: { lte: sunday },
-          endDate: { gte: monday },
-        },
-      });
-
-      const avgAgg = await this.prisma.attendance.aggregate({
-        where: {
-          branchId: branch.id,
-          date: { gte: monday, lte: sunday },
-          totalHours: { not: null },
-        },
-        _avg: { totalHours: true },
-      });
-
-      const statusMap: Record<string, number> = {};
-      for (const group of attendanceGroups) {
-        statusMap[group.status] = group._count.id;
-      }
-
+    const weeklyStats = branches.map((branch) => {
+      const totalEmployees = employeeMap.get(branch.id) ?? 0;
+      const statusMap = statusByBranch.get(branch.id) ?? {};
       const present = (statusMap['ON_TIME'] ?? 0) + (statusMap['LATE'] ?? 0);
       const late = statusMap['LATE'] ?? 0;
-
-      // For weekly, workdays = totalEmployees * 5 (Mon-Fri) as baseline
+      const onLeave = leaveByBranch.get(branch.id) ?? 0;
       const workdays = totalEmployees * 5;
-      const absent = workdays - present - onLeaveCount;
+      const absent = Math.max(0, workdays - present - onLeave);
+      const avgHours = avgHoursMap.get(branch.id);
 
-      weeklyStats.push({
+      return {
         branchName: branch.name,
         totalEmployees,
         workdays,
         present,
         late,
-        absent: Math.max(0, absent),
-        onLeave: onLeaveCount,
-        avgHours: avgAgg._avg.totalHours
-          ? Math.round(avgAgg._avg.totalHours * 100) / 100
-          : null,
-      });
-    }
+        absent,
+        onLeave,
+        avgHours: avgHours ? Math.round(avgHours * 100) / 100 : null,
+      };
+    });
 
     return {
       weekOf,
@@ -224,82 +232,88 @@ export class ReportsService {
     endDate.setHours(23, 59, 59, 999);
 
     const branchWhere: Prisma.BranchWhereInput = { isActive: true };
-    if (branchId) {
-      branchWhere.id = branchId;
+    if (branchId) branchWhere.id = branchId;
+
+    const attendanceWhere: Prisma.AttendanceWhereInput = {
+      date: { gte: startDate, lte: endDate },
+    };
+    if (branchId) attendanceWhere.branchId = branchId;
+
+    // Count working days in the month (Mon-Fri)
+    let workingDays = 0;
+    const cursor = new Date(startDate);
+    while (cursor <= endDate) {
+      const day = cursor.getDay();
+      if (day !== 0 && day !== 6) workingDays++;
+      cursor.setDate(cursor.getDate() + 1);
     }
 
-    const branches = await this.prisma.branch.findMany({
-      where: branchWhere,
-      select: { id: true, name: true, code: true },
-    });
+    const [branches, employeeCounts, attendanceGroups, leaveCounts, avgHoursAgg] =
+      await Promise.all([
+        this.prisma.branch.findMany({
+          where: branchWhere,
+          select: { id: true, name: true, code: true },
+        }),
+        this.prisma.user.groupBy({
+          by: ['branchId'],
+          where: { isActive: true, ...(branchId ? { branchId } : {}) },
+          _count: { id: true },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId', 'status'],
+          where: attendanceWhere,
+          _count: { id: true },
+        }),
+        this.prisma.leave.findMany({
+          where: {
+            ...(branchId ? { user: { branchId } } : {}),
+            isApproved: true,
+            startDate: { lte: endDate },
+            endDate: { gte: startDate },
+          },
+          select: { user: { select: { branchId: true } } },
+        }),
+        this.prisma.attendance.groupBy({
+          by: ['branchId'],
+          where: { ...attendanceWhere, totalHours: { not: null } },
+          _avg: { totalHours: true },
+        }),
+      ]);
 
-    const monthlyStats: any[] = [];
+    const employeeMap = new Map(employeeCounts.map((e) => [e.branchId, e._count.id]));
+    const statusByBranch = new Map<string, Record<string, number>>();
+    for (const g of attendanceGroups) {
+      if (!statusByBranch.has(g.branchId)) statusByBranch.set(g.branchId, {});
+      statusByBranch.get(g.branchId)![g.status] = g._count.id;
+    }
+    const leaveByBranch = new Map<string, number>();
+    for (const l of leaveCounts) {
+      const bid = l.user.branchId;
+      if (bid) leaveByBranch.set(bid, (leaveByBranch.get(bid) ?? 0) + 1);
+    }
+    const avgHoursMap = new Map(avgHoursAgg.map((a) => [a.branchId, a._avg.totalHours]));
 
-    for (const branch of branches) {
-      const totalEmployees = await this.prisma.user.count({
-        where: { branchId: branch.id, isActive: true },
-      });
-
-      const attendanceGroups = await this.prisma.attendance.groupBy({
-        by: ['status'],
-        where: {
-          branchId: branch.id,
-          date: { gte: startDate, lte: endDate },
-        },
-        _count: { id: true },
-      });
-
-      const onLeaveCount = await this.prisma.leave.count({
-        where: {
-          user: { branchId: branch.id },
-          isApproved: true,
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
-        },
-      });
-
-      const avgAgg = await this.prisma.attendance.aggregate({
-        where: {
-          branchId: branch.id,
-          date: { gte: startDate, lte: endDate },
-          totalHours: { not: null },
-        },
-        _avg: { totalHours: true },
-      });
-
-      const statusMap: Record<string, number> = {};
-      for (const group of attendanceGroups) {
-        statusMap[group.status] = group._count.id;
-      }
-
+    const monthlyStats = branches.map((branch) => {
+      const totalEmployees = employeeMap.get(branch.id) ?? 0;
+      const statusMap = statusByBranch.get(branch.id) ?? {};
       const present = (statusMap['ON_TIME'] ?? 0) + (statusMap['LATE'] ?? 0);
       const late = statusMap['LATE'] ?? 0;
-
-      // Count working days in the month (Mon-Fri)
-      let workingDays = 0;
-      const cursor = new Date(startDate);
-      while (cursor <= endDate) {
-        const day = cursor.getDay();
-        if (day !== 0 && day !== 6) workingDays++;
-        cursor.setDate(cursor.getDate() + 1);
-      }
-
+      const onLeave = leaveByBranch.get(branch.id) ?? 0;
       const totalWorkSlots = totalEmployees * workingDays;
-      const absent = totalWorkSlots - present - onLeaveCount;
+      const absent = Math.max(0, totalWorkSlots - present - onLeave);
+      const avgHours = avgHoursMap.get(branch.id);
 
-      monthlyStats.push({
+      return {
         branchName: branch.name,
         totalEmployees,
         workingDays,
         present,
         late,
-        absent: Math.max(0, absent),
-        onLeave: onLeaveCount,
-        avgHours: avgAgg._avg.totalHours
-          ? Math.round(avgAgg._avg.totalHours * 100) / 100
-          : null,
-      });
-    }
+        absent,
+        onLeave,
+        avgHours: avgHours ? Math.round(avgHours * 100) / 100 : null,
+      };
+    });
 
     return { month, year, branches: monthlyStats };
   }

@@ -1,10 +1,13 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({
@@ -12,6 +15,7 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Global pipes, filters, interceptors
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -19,6 +23,8 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   const config = new DocumentBuilder()
     .setTitle('Smart Attendance API')
@@ -31,7 +37,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`🚀 Backend running on http://localhost:${port}`);
-  console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+  logger.log(`Backend running on http://localhost:${port}`);
+  logger.log(`Swagger docs at http://localhost:${port}/api/docs`);
 }
 bootstrap();

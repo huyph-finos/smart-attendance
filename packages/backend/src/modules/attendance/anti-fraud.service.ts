@@ -3,6 +3,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { AnomalyType, AnomalySeverity } from '@prisma/client';
 import {
+  FRAUD_THRESHOLDS,
+  FRAUD_LAYER_MAX_SCORES,
+  SPEED_THRESHOLDS,
+} from '@smart-attendance/shared';
+import {
   haversineDistance,
   isWithinGeofence,
   calculateTravelSpeed,
@@ -51,24 +56,23 @@ export class AntiFraudService {
     const score = Math.min(rawScore, 100);
 
     let passed: boolean;
-    if (score <= 20) {
-      // CLEAN
+    if (score <= FRAUD_THRESHOLDS.CLEAN) {
       passed = true;
-    } else if (score <= 50) {
-      // SUSPICIOUS - allowed but flagged
+    } else if (score <= FRAUD_THRESHOLDS.SUSPICIOUS) {
+      // Suspicious - allowed but flagged
       passed = true;
       this.logger.warn(
         `Suspicious check-in for user ${userId}: score=${score}`,
       );
-    } else if (score <= 80) {
-      // HIGH RISK - allowed but manager notified
+    } else if (score <= FRAUD_THRESHOLDS.HIGH_RISK) {
+      // High risk - allowed but manager notified
       passed = true;
       this.logger.warn(
         `High-risk check-in for user ${userId}: score=${score}`,
       );
       await this.cacheHighRiskAlert(userId, branchId, score);
     } else {
-      // BLOCKED
+      // Blocked
       passed = false;
       this.logger.error(
         `BLOCKED check-in for user ${userId}: score=${score}`,
@@ -116,7 +120,7 @@ export class AntiFraudService {
       return { score: 0, detail: 'WiFi BSSID matches branch network' };
     }
 
-    return { score: 30, detail: 'WiFi BSSID does not match any branch network' };
+    return { score: FRAUD_LAYER_MAX_SCORES.WIFI, detail: 'WiFi BSSID does not match any branch network' };
   }
 
   // ──────────────────────────────────────────────
@@ -162,7 +166,7 @@ export class AntiFraudService {
     }
 
     return {
-      score: 40,
+      score: FRAUD_LAYER_MAX_SCORES.GPS,
       detail: `Outside geofence (${distanceRounded}m / ${branch.radius}m radius)`,
       distance: distanceRounded,
     };
@@ -179,7 +183,7 @@ export class AntiFraudService {
     // Mock location detection takes highest priority
     if (dto.mockLocationDetected) {
       return {
-        score: 50,
+        score: FRAUD_LAYER_MAX_SCORES.DEVICE,
         detail: 'Mock location detected on device',
       };
     }
@@ -275,19 +279,19 @@ export class AntiFraudService {
 
     const speedRounded = Math.round(speedKmh * 10) / 10;
 
-    if (speedKmh > 200) {
+    if (speedKmh > SPEED_THRESHOLDS.IMPOSSIBLE) {
       // Impossible travel speed - likely location spoofing
       this.logger.warn(
         `Impossible travel speed detected for user ${userId}: ${speedRounded} km/h`,
       );
       return {
-        score: 40,
+        score: FRAUD_LAYER_MAX_SCORES.SPEED,
         detail: `Impossible travel speed: ${speedRounded} km/h`,
         speedKmh: speedRounded,
       };
     }
 
-    if (speedKmh > 120) {
+    if (speedKmh > SPEED_THRESHOLDS.HIGH) {
       return {
         score: 15,
         detail: `High travel speed: ${speedRounded} km/h`,
@@ -365,15 +369,15 @@ export class AntiFraudService {
       metadata?: Record<string, unknown>;
     }> = [];
 
-    if (result.checks.wifi.score >= 30) {
+    if (result.checks.wifi.score >= FRAUD_LAYER_MAX_SCORES.WIFI) {
       anomalies.push({
         type: AnomalyType.WIFI_MISMATCH,
-        severity: result.score > 80 ? AnomalySeverity.CRITICAL : AnomalySeverity.MEDIUM,
+        severity: result.score > FRAUD_THRESHOLDS.BLOCKED ? AnomalySeverity.CRITICAL : AnomalySeverity.MEDIUM,
         description: result.checks.wifi.detail,
       });
     }
 
-    if (result.checks.gps.score >= 40) {
+    if (result.checks.gps.score >= FRAUD_LAYER_MAX_SCORES.GPS) {
       anomalies.push({
         type: AnomalyType.LOCATION_SPOOF,
         severity: AnomalySeverity.HIGH,
@@ -382,7 +386,7 @@ export class AntiFraudService {
       });
     }
 
-    if (result.checks.device.score >= 50) {
+    if (result.checks.device.score >= FRAUD_LAYER_MAX_SCORES.DEVICE) {
       anomalies.push({
         type: AnomalyType.DEVICE_MISMATCH,
         severity: AnomalySeverity.CRITICAL,
@@ -390,7 +394,7 @@ export class AntiFraudService {
       });
     }
 
-    if (result.checks.speed.score >= 40) {
+    if (result.checks.speed.score >= FRAUD_LAYER_MAX_SCORES.SPEED) {
       anomalies.push({
         type: AnomalyType.SPEED_ANOMALY,
         severity: AnomalySeverity.CRITICAL,

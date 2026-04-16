@@ -179,35 +179,40 @@ export class DashboardService {
             : 0,
       }));
     } else {
-      // Fallback: raw attendance groupBy
-      trends = [];
+      // Fallback: batch query instead of N queries per day
+      const attendanceWhere: Prisma.AttendanceWhereInput = {
+        date: { gte: startDate, lte: endDate },
+      };
+      const userWhere: Prisma.UserWhereInput = { isActive: true };
+      if (branchId) {
+        attendanceWhere.branchId = branchId;
+        userWhere.branchId = branchId;
+      }
 
+      const [totalEmployees, groups] = await Promise.all([
+        this.prisma.user.count({ where: userWhere }),
+        this.prisma.attendance.groupBy({
+          by: ['date', 'status'],
+          where: attendanceWhere,
+          _count: { id: true },
+        }),
+      ]);
+
+      // Build date → status → count map
+      const dateStatusMap = new Map<string, Record<string, number>>();
+      for (const g of groups) {
+        const dateKey = g.date.toISOString().split('T')[0];
+        if (!dateStatusMap.has(dateKey)) {
+          dateStatusMap.set(dateKey, {});
+        }
+        dateStatusMap.get(dateKey)![g.status] = g._count.id;
+      }
+
+      trends = [];
       const cursor = new Date(startDate);
       while (cursor <= endDate) {
-        const dayStart = new Date(cursor);
-        const dateKey = dayStart.toISOString().split('T')[0];
-
-        const attendanceWhere: Prisma.AttendanceWhereInput = { date: dayStart };
-        const userWhere: Prisma.UserWhereInput = { isActive: true };
-        if (branchId) {
-          attendanceWhere.branchId = branchId;
-          userWhere.branchId = branchId;
-        }
-
-        const [totalEmployees, groups] = await Promise.all([
-          this.prisma.user.count({ where: userWhere }),
-          this.prisma.attendance.groupBy({
-            by: ['status'],
-            where: attendanceWhere,
-            _count: { id: true },
-          }),
-        ]);
-
-        const statusMap: Record<string, number> = {};
-        for (const g of groups) {
-          statusMap[g.status] = g._count.id;
-        }
-
+        const dateKey = cursor.toISOString().split('T')[0];
+        const statusMap = dateStatusMap.get(dateKey) ?? {};
         const present = (statusMap['ON_TIME'] ?? 0) + (statusMap['LATE'] ?? 0);
         const late = statusMap['LATE'] ?? 0;
         const absent = Math.max(0, totalEmployees - present);
@@ -245,39 +250,46 @@ export class DashboardService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const branches = await this.prisma.branch.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        latitude: true,
-        longitude: true,
-      },
-    });
+    // Batch queries instead of N+1 loop (was: 100 branches × 2 queries = 200 queries)
+    const [branches, employeeCounts, checkedInCounts] = await Promise.all([
+      this.prisma.branch.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          latitude: true,
+          longitude: true,
+        },
+      }),
+      this.prisma.user.groupBy({
+        by: ['branchId'],
+        where: { isActive: true },
+        _count: { id: true },
+      }),
+      this.prisma.attendance.groupBy({
+        by: ['branchId'],
+        where: { date: today, checkInTime: { not: null } },
+        _count: { id: true },
+      }),
+    ]);
 
-    const heatmap: any[] = [];
+    const employeeMap = new Map(
+      employeeCounts.map((e) => [e.branchId, e._count.id]),
+    );
+    const checkedInMap = new Map(
+      checkedInCounts.map((c) => [c.branchId, c._count.id]),
+    );
 
-    for (const branch of branches) {
-      const [employeeCount, checkedInCount] = await Promise.all([
-        this.prisma.user.count({
-          where: { branchId: branch.id, isActive: true },
-        }),
-        this.prisma.attendance.count({
-          where: {
-            branchId: branch.id,
-            date: today,
-            checkInTime: { not: null },
-          },
-        }),
-      ]);
-
+    return branches.map((branch) => {
+      const employeeCount = employeeMap.get(branch.id) ?? 0;
+      const checkedInCount = checkedInMap.get(branch.id) ?? 0;
       const attendanceRate =
         employeeCount > 0
           ? Math.round((checkedInCount / employeeCount) * 10000) / 100
           : 0;
 
-      heatmap.push({
+      return {
         branchId: branch.id,
         branchName: branch.name,
         code: branch.code,
@@ -286,10 +298,8 @@ export class DashboardService {
         attendanceRate,
         employeeCount,
         checkedInCount,
-      });
-    }
-
-    return heatmap;
+      };
+    });
   }
 
   // ──────────────────────────────────────────────
