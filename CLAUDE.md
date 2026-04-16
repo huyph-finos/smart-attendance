@@ -2,7 +2,7 @@
 
 ## Project Overview
 Hệ thống chấm công thông minh cho doanh nghiệp quy mô 100 chi nhánh, 5.000 nhân viên.
-Xác định vị trí bằng WiFi SSID/BSSID và GPS geofencing. Tích hợp Agentic AI (Claude API + Tool Use).
+Xác định vị trí bằng WiFi SSID/BSSID và GPS geofencing. Tích hợp Agentic AI (Gemini API + Function Calling).
 
 ## Tech Stack
 - **Monorepo**: pnpm workspaces + Turborepo
@@ -10,7 +10,7 @@ Xác định vị trí bằng WiFi SSID/BSSID và GPS geofencing. Tích hợp Ag
 - **Backend**: NestJS 11 (TypeScript), Prisma ORM (PostgreSQL), Bull queue, Socket.IO
 - **Database**: PostgreSQL 16 + Redis 7
 - **Auth**: JWT (access 15m + refresh 7d) with Redis blacklist
-- **AI**: Claude API (`@anthropic-ai/sdk`) with Tool Use pattern — 5 specialized agents
+- **AI**: Gemini API (`@google/generative-ai`, model `gemini-2.5-flash-lite`) with Function Calling — 5 specialized agents
 - **Deploy**: Docker multi-stage builds, docker-compose
 
 ## Project Structure
@@ -41,7 +41,7 @@ smart-attendance/
 ## Key Modules
 - **Anti-Fraud**: Multi-layer scoring (WiFi + GPS + Device + Speed + AI) — 0-100 score
 - **AI Agents**: HR Chatbot, Anomaly Detector, Report Generator, Shift Optimizer, Predictive Analytics
-- **AI Tool Use**: Tools execute real Prisma queries; agentic loop continues until Claude's stop_reason !== 'tool_use'
+- **AI Tool Use**: Tools execute real Prisma queries; agentic loop continues while Gemini returns functionCall parts
 
 ## Dev Commands
 ```bash

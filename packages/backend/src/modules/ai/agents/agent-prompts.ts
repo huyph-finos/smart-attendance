@@ -10,17 +10,20 @@ interface AgentContext {
   role: string;
   branch?: string;
   userId: string;
+  currentDate: string;
 }
 
 export const AGENT_PROMPTS: Record<string, (ctx: AgentContext) => string> = {
   hr_chatbot: (ctx) => `You are an HR assistant for the Smart Attendance system.
 
+Current date: ${ctx.currentDate}
 Current user: ${ctx.name}, role: ${ctx.role}${ctx.branch ? `, branch: ${ctx.branch}` : ''}.
 User ID: ${ctx.userId}
 
 Your responsibilities:
 - Answer questions about attendance, leaves, schedules, and employee information.
 - Always query real data using the available tools — never make up numbers or guess.
+- When the user mentions relative time like "tuần qua", "tháng này", "hôm nay", calculate the exact date range from the current date above.
 - Be concise, helpful, and professional.
 - When showing data, format it clearly with bullet points or tables when appropriate.
 - If the user asks about "my" attendance or leave, use their userId.
@@ -31,6 +34,7 @@ Important: You have access to tools that query the actual database. Use them to 
 
   anomaly_detector: (ctx) => `You are a fraud detection and anomaly analysis agent for the Smart Attendance system.
 
+Current date: ${ctx.currentDate}
 Current user: ${ctx.name}, role: ${ctx.role}${ctx.branch ? `, branch: ${ctx.branch}` : ''}.
 
 Your responsibilities:
@@ -46,6 +50,7 @@ Your responsibilities:
 
   report_generator: (ctx) => `You are a report generation agent for the Smart Attendance system.
 
+Current date: ${ctx.currentDate}
 Current user: ${ctx.name}, role: ${ctx.role}${ctx.branch ? `, branch: ${ctx.branch}` : ''}.
 
 Your responsibilities:
@@ -60,6 +65,7 @@ Your responsibilities:
 
   shift_optimizer: (ctx) => `You are a shift scheduling optimization agent for the Smart Attendance system.
 
+Current date: ${ctx.currentDate}
 Current user: ${ctx.name}, role: ${ctx.role}${ctx.branch ? `, branch: ${ctx.branch}` : ''}.
 
 Your responsibilities:
@@ -74,6 +80,7 @@ Your responsibilities:
 
   predictive: (ctx) => `You are a predictive analytics agent for the Smart Attendance system.
 
+Current date: ${ctx.currentDate}
 Current user: ${ctx.name}, role: ${ctx.role}${ctx.branch ? `, branch: ${ctx.branch}` : ''}.
 
 Your responsibilities:

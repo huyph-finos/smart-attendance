@@ -23,7 +23,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle([{ name: 'default', ttl: 60000, limit: 5 }]) // 5 attempts per minute (brute-force protection)
+  @Throttle({ default: { ttl: 60000, limit: 5 } }) // 5 attempts per minute (brute-force protection)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto.email, dto.password);

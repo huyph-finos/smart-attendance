@@ -64,10 +64,10 @@ interface Conversation {
 /* ------------------------------------------------------------------ */
 
 const agentTypes = [
-  { value: "chatbot", label: "HR Chatbot" },
-  { value: "report", label: "Report Generator" },
-  { value: "anomaly", label: "Anomaly Detector" },
-  { value: "shift", label: "Shift Optimizer" },
+  { value: "hr_chatbot", label: "HR Chatbot" },
+  { value: "report_generator", label: "Report Generator" },
+  { value: "anomaly_detector", label: "Anomaly Detector" },
+  { value: "shift_optimizer", label: "Shift Optimizer" },
   { value: "predictive", label: "Predictive Analytics" },
 ];
 
@@ -84,6 +84,7 @@ const examplePrompts = [
 /* ------------------------------------------------------------------ */
 
 function renderMarkdown(text: string) {
+  if (typeof text !== "string") text = String(text ?? "");
   const lines = text.split("\n");
   const result: React.ReactNode[] = [];
   let inCodeBlock = false;
@@ -252,7 +253,7 @@ function TypingIndicator() {
 
 export default function ChatbotPage() {
   const searchParams = useSearchParams();
-  const initialAgent = searchParams.get("agent") ?? "chatbot";
+  const initialAgent = searchParams.get("agent") ?? "hr_chatbot";
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -303,7 +304,7 @@ export default function ChatbotPage() {
         (m: { id?: string; role: string; content: string; toolCalls?: ToolCall[]; createdAt?: string }) => ({
           id: m.id ?? crypto.randomUUID(),
           role: m.role as "user" | "assistant",
-          content: m.content,
+          content: typeof m.content === "string" ? m.content : String(m.content ?? ""),
           toolCalls: m.toolCalls ?? [],
           timestamp: m.createdAt ? new Date(m.createdAt) : new Date(),
         })
@@ -357,7 +358,7 @@ export default function ChatbotPage() {
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: result?.content ?? result?.message ?? "No response received.",
+        content: result?.response ?? result?.content ?? result?.message ?? "No response received.",
         toolCalls: result?.toolCalls ?? [],
         timestamp: new Date(),
       };

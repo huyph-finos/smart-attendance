@@ -37,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Build structured error response
     let message: string;
     let errorCode: string | undefined;
-    let details: unknown | undefined;
+    let details: Record<string, unknown> | undefined;
 
     if (typeof exceptionResponse === 'string') {
       message = exceptionResponse;
@@ -48,7 +48,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       // Pass through additional fields (e.g., fraudScore, checks)
       const { message: _, statusCode: __, errorCode: ___, error: ____, ...rest } = resp;
       if (Object.keys(rest).length > 0) {
-        details = rest;
+        details = rest as Record<string, unknown>;
       }
     } else {
       message = 'Internal server error';

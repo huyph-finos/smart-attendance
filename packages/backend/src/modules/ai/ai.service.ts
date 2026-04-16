@@ -5,7 +5,13 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import {
+  GoogleGenerativeAI,
+  Content,
+  Part,
+  FunctionCallPart,
+  FunctionResponsePart,
+} from '@google/generative-ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { ChatDto } from './dto/chat.dto';
@@ -37,7 +43,7 @@ interface UserContext {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private readonly anthropic: Anthropic;
+  private readonly genAI: GoogleGenerativeAI;
   private readonly maxToolRounds = 10; // safety limit on agentic loop iterations
   private readonly rateLimitMax = 30; // max requests per user per hour
 
@@ -46,9 +52,9 @@ export class AiService {
     private readonly redis: RedisService,
     private readonly configService: ConfigService,
   ) {
-    this.anthropic = new Anthropic({
-      apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
-    });
+    this.genAI = new GoogleGenerativeAI(
+      this.configService.get<string>('GEMINI_API_KEY') ?? '',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -71,62 +77,77 @@ export class AiService {
       name: `${userContext.firstName ?? ''} ${userContext.lastName ?? ''}`.trim() || 'User',
       role: userContext.role,
       branch: userContext.branchName,
-      userId,
+      userId: userContext.userId,
+      currentDate: new Date().toISOString().split('T')[0],
     });
 
     // 4. Get tool definitions
     const toolDefinitions = getToolDefinitions();
 
-    // 5. Build messages array from conversation history + new user message
+    // 5. Build Gemini model with system instruction and tools
+    const model = this.genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash-lite',
+      systemInstruction: systemPrompt,
+      tools: [{ functionDeclarations: toolDefinitions }],
+    });
+
+    // 6. Build contents array from conversation history + new user message
     const existingMessages = (conversation.messages as any[]) ?? [];
-    const messages: Anthropic.Messages.MessageParam[] = [
-      ...existingMessages,
-      { role: 'user', content: dto.message },
+    const contents: Content[] = [
+      ...this.toGeminiContents(existingMessages),
+      { role: 'user', parts: [{ text: dto.message }] },
     ];
 
-    // 6. Agentic loop — keep calling Claude until it stops requesting tools
+    // 7. Agentic loop — keep calling Gemini until it stops requesting function calls
     const toolCalls: ToolCallRecord[] = [];
     let rounds = 0;
-    let response: Anthropic.Messages.Message;
 
+    let response;
     try {
-      response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: systemPrompt,
-        tools: toolDefinitions,
-        messages,
-      });
+      response = await model.generateContent({ contents });
     } catch (err) {
-      this.logger.error('Anthropic API call failed', err);
+      this.logger.error('Gemini API call failed', err);
       throw new HttpException(
         'AI service temporarily unavailable',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
 
-    // The agentic loop: while Claude requests tool use, execute tools and continue
-    while (response.stop_reason === 'tool_use' && rounds < this.maxToolRounds) {
+    // The agentic loop: while Gemini requests function calls, execute them and continue
+    while (rounds < this.maxToolRounds) {
+      const candidate = response.response.candidates?.[0];
+      if (!candidate) break;
+
+      const functionCalls = candidate.content.parts.filter(
+        (part): part is FunctionCallPart => 'functionCall' in part,
+      );
+
+      // No function calls — Gemini is done
+      if (functionCalls.length === 0) break;
+
       rounds++;
 
-      // Append the assistant's response (which contains tool_use blocks) to messages
-      messages.push({ role: 'assistant', content: response.content });
+      // Append the model's response (with function call parts) to contents
+      contents.push({
+        role: 'model',
+        parts: candidate.content.parts,
+      });
 
-      // Process every tool_use block in this response
-      const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+      // Execute each function call and build function response parts
+      const functionResponses: FunctionResponsePart[] = [];
 
-      for (const block of response.content) {
-        if (block.type !== 'tool_use') continue;
+      for (const fc of functionCalls) {
+        const { name, args } = fc.functionCall;
 
         this.logger.log(
-          `Tool call [round ${rounds}]: ${block.name}(${JSON.stringify(block.input)})`,
+          `Tool call [round ${rounds}]: ${name}(${JSON.stringify(args)})`,
         );
 
         let result: string;
         try {
           result = await executeTool(
-            block.name,
-            block.input as Record<string, any>,
+            name,
+            (args as Record<string, any>) ?? {},
             this.prisma,
             {
               userId: userContext.userId,
@@ -135,38 +156,36 @@ export class AiService {
             },
           );
         } catch (err) {
-          this.logger.error(`Tool execution error: ${block.name}`, err);
+          this.logger.error(`Tool execution error: ${name}`, err);
           result = JSON.stringify({
             error: `Tool execution failed: ${(err as Error).message}`,
           });
         }
 
         toolCalls.push({
-          name: block.name,
-          input: block.input as Record<string, any>,
+          name,
+          input: (args as Record<string, any>) ?? {},
           output: result,
         });
 
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: result,
+        functionResponses.push({
+          functionResponse: {
+            name,
+            response: JSON.parse(result),
+          },
         });
       }
 
-      // Append tool results as the next user message and call Claude again
-      messages.push({ role: 'user', content: toolResults });
+      // Append function responses and call Gemini again
+      contents.push({
+        role: 'user',
+        parts: functionResponses,
+      });
 
       try {
-        response = await this.anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
-          system: systemPrompt,
-          tools: toolDefinitions,
-          messages,
-        });
+        response = await model.generateContent({ contents });
       } catch (err) {
-        this.logger.error('Anthropic API call failed during tool loop', err);
+        this.logger.error('Gemini API call failed during tool loop', err);
         throw new HttpException(
           'AI service temporarily unavailable',
           HttpStatus.SERVICE_UNAVAILABLE,
@@ -174,19 +193,23 @@ export class AiService {
       }
     }
 
-    // 7. Extract the final text response
-    const textBlocks = response.content.filter(
-      (block): block is Anthropic.Messages.TextBlock => block.type === 'text',
-    );
-    const finalResponse = textBlocks.map((b) => b.text).join('\n');
+    // 8. Extract the final text response
+    const candidate = response.response.candidates?.[0];
+    const textParts = candidate?.content.parts.filter(
+      (part: Part) => 'text' in part,
+    ) ?? [];
+    const finalResponse = textParts.map((p: any) => p.text).join('\n');
 
-    // Add the final assistant message to the conversation
-    messages.push({ role: 'assistant', content: response.content });
+    // Add final model message to contents for storage
+    if (candidate) {
+      contents.push({
+        role: 'model',
+        parts: candidate.content.parts,
+      });
+    }
 
-    // 8. Save the updated conversation to the database
-    // We store only the user/assistant text messages (not raw tool blocks)
-    // to keep the stored history manageable
-    const storedMessages = this.compactMessages(messages);
+    // 9. Save the updated conversation to the database
+    const storedMessages = this.compactMessages(contents);
 
     await this.prisma.aiConversation.update({
       where: { id: conversation.id },
@@ -201,7 +224,7 @@ export class AiService {
       },
     });
 
-    // 9. Increment rate limit counter
+    // 10. Increment rate limit counter
     await this.incrementRateLimit(userId);
 
     return {
@@ -227,7 +250,6 @@ export class AiService {
       select: {
         id: true,
         agentType: true,
-        metadata: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -263,7 +285,6 @@ export class AiService {
         where: { id: conversationId, userId },
       });
       if (existing) return existing;
-      // If not found, fall through and create a new one
     }
 
     return this.prisma.aiConversation.create({
@@ -271,33 +292,42 @@ export class AiService {
         userId,
         agentType,
         messages: [],
+        metadata: { agentType },
       },
     });
   }
 
   /**
-   * Compact the full message history into a storable format.
-   * Keeps user text messages and assistant text responses.
-   * Tool use/result blocks are summarized to save space.
+   * Convert stored messages (simple role/content pairs) into Gemini Content format.
+   */
+  private toGeminiContents(
+    stored: Array<{ role: string; content: string }>,
+  ): Content[] {
+    return stored.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : msg.role,
+      parts: [{ text: msg.content }],
+    }));
+  }
+
+  /**
+   * Extract user and model text messages from the full Gemini contents array
+   * for compact storage. We only store simple role/content pairs, not
+   * raw function call/response blocks.
    */
   private compactMessages(
-    messages: Anthropic.Messages.MessageParam[],
+    contents: Content[],
   ): Array<{ role: string; content: string }> {
     const compacted: Array<{ role: string; content: string }> = [];
 
-    for (const msg of messages) {
-      if (typeof msg.content === 'string') {
-        compacted.push({ role: msg.role, content: msg.content });
-      } else if (Array.isArray(msg.content)) {
-        // Extract text blocks from content arrays
-        const textParts = msg.content
-          .filter((block: any) => block.type === 'text')
-          .map((block: any) => block.text);
+    for (const content of contents) {
+      const textParts = content.parts
+        .filter((part) => 'text' in part)
+        .map((part: any) => part.text);
 
-        if (textParts.length > 0) {
-          compacted.push({ role: msg.role, content: textParts.join('\n') });
-        }
-        // Skip pure tool_use/tool_result messages to keep history lean
+      if (textParts.length > 0) {
+        // Normalize Gemini 'model' role to 'assistant' for consistent storage
+        const role = content.role === 'model' ? 'assistant' : content.role;
+        compacted.push({ role, content: textParts.join('\n') });
       }
     }
 
@@ -306,7 +336,7 @@ export class AiService {
 
   /**
    * Truncate long tool output strings for the response payload.
-   * The full output is still sent to Claude during the loop.
+   * The full output is still sent to Gemini during the loop.
    */
   private truncateOutput(output: string, maxLen = 500): string {
     if (output.length <= maxLen) return output;
@@ -314,30 +344,29 @@ export class AiService {
   }
 
   /**
-   * Check if the user has exceeded the hourly rate limit.
+   * Check per-user rate limiting (max N requests per hour).
    */
-  private async checkRateLimit(userId: string): Promise<void> {
-    const key = `ai:rate:${userId}`;
-    const current = await this.redis.get(key);
-    const count = current ? parseInt(current, 10) : 0;
-
-    if (count >= this.rateLimitMax) {
+  private async checkRateLimit(userId: string) {
+    const key = `ai:ratelimit:${userId}`;
+    const count = await this.redis.get(key);
+    if (count && parseInt(count, 10) >= this.rateLimitMax) {
       throw new HttpException(
-        `Rate limit exceeded. Maximum ${this.rateLimitMax} AI requests per hour.`,
+        'Rate limit exceeded. Please try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
   }
 
   /**
-   * Increment the rate limit counter for the user.
-   * Key expires after 1 hour automatically.
+   * Increment the per-user rate limit counter with 1-hour TTL.
    */
-  private async incrementRateLimit(userId: string): Promise<void> {
-    const key = `ai:rate:${userId}`;
-    const pipeline = this.redis.pipeline();
-    pipeline.incr(key);
-    pipeline.expire(key, 3600); // 1 hour TTL
-    await pipeline.exec();
+  private async incrementRateLimit(userId: string) {
+    const key = `ai:ratelimit:${userId}`;
+    const current = await this.redis.get(key);
+    if (current) {
+      await this.redis.set(key, String(parseInt(current, 10) + 1));
+    } else {
+      await this.redis.set(key, '1', 'EX', 3600);
+    }
   }
 }

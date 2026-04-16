@@ -7,7 +7,7 @@ Hệ thống chấm công thông minh với AI, xác định vị trí bằng Wi
 ### Với Docker (khuyến nghị)
 ```bash
 cp .env.example .env
-# Điền ANTHROPIC_API_KEY vào .env (cần cho AI features)
+# Điền GEMINI_API_KEY vào .env (cần cho AI features)
 docker-compose up
 ```
 - Frontend: http://localhost:3000
@@ -47,7 +47,7 @@ pnpm dev
 | Frontend | Next.js 16, React 19, TailwindCSS 4, shadcn/ui, PWA |
 | Backend | NestJS 11, TypeScript, Prisma ORM |
 | Database | PostgreSQL 16, Redis 7 |
-| AI | Claude API (Anthropic SDK) + Tool Use pattern |
+| AI | Gemini API (`gemini-2.5-flash-lite`) + Function Calling |
 | Queue | BullMQ (background jobs) |
 | Realtime | Socket.IO (WebSocket) |
 | Deploy | Docker multi-stage, docker-compose |
@@ -91,7 +91,7 @@ notifications, ai_conversations, daily_summaries
 
 **Score thresholds**: 0-20 CLEAN | 21-50 SUSPICIOUS | 51-80 HIGH RISK | 81+ BLOCKED
 
-### Agentic AI System (Claude API + Tool Use)
+### Agentic AI System (Gemini API + Function Calling)
 5 AI Agents chuyên biệt, mỗi agent có bộ tools riêng để query trực tiếp database:
 
 | Agent | Chức năng | Tools |
@@ -102,7 +102,7 @@ notifications, ai_conversations, daily_summaries
 | Shift Optimizer | Gợi ý xếp ca tối ưu | query_employees, detect_patterns |
 | Predictive Analytics | Dự đoán vắng mặt, trends | aggregate_stats, detect_patterns |
 
-**Architecture**: Agentic loop — Claude gọi tools → tools query real DB → results fed back → Claude tiếp tục cho đến khi có câu trả lời cuối.
+**Architecture**: Agentic loop — Gemini gọi Function Calling → tools query real DB → results fed back → Gemini tiếp tục cho đến khi có câu trả lời cuối.
 
 ### Creative Features (25% điểm sáng tạo)
 - **Mood Check-in**: Nhân viên chọn emoji mood khi check-in → color-coded, animated

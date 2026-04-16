@@ -33,7 +33,7 @@ const agents = [
     icon: FileBarChart,
     color: "text-green-600",
     bgColor: "bg-green-50 dark:bg-green-950",
-    href: "/dashboard/ai/chatbot?agent=report",
+    href: "/dashboard/ai/chatbot?agent=report_generator",
     badge: "Automated",
   },
   {
@@ -44,7 +44,7 @@ const agents = [
     icon: AlertOctagon,
     color: "text-red-600",
     bgColor: "bg-red-50 dark:bg-red-950",
-    href: "/dashboard/ai/chatbot?agent=anomaly",
+    href: "/dashboard/ai/chatbot?agent=anomaly_detector",
     badge: "Real-time",
   },
   {
@@ -55,7 +55,7 @@ const agents = [
     icon: Calendar,
     color: "text-purple-600",
     bgColor: "bg-purple-50 dark:bg-purple-950",
-    href: "/dashboard/ai/chatbot?agent=shift",
+    href: "/dashboard/ai/chatbot?agent=shift_optimizer",
     badge: "Smart",
   },
   {
