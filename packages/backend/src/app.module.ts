@@ -11,6 +11,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AiModule } from './modules/ai/ai.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LeavesModule } from './modules/leaves/leaves.module';
+import { AnomaliesModule } from './modules/anomalies/anomalies.module';
+import { ShiftsModule } from './modules/shifts/shifts.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { LeavesModule } from './modules/leaves/leaves.module';
     AiModule,
     NotificationsModule,
     LeavesModule,
+    AnomaliesModule,
+    ShiftsModule,
   ],
 })
 export class AppModule {}

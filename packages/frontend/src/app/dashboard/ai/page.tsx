@@ -10,6 +10,7 @@ import {
   Calendar,
   TrendingUp,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 const agents = [
@@ -67,6 +68,17 @@ const agents = [
     bgColor: "bg-orange-50 dark:bg-orange-950",
     href: "/dashboard/ai/chatbot?agent=predictive",
     badge: "AI",
+  },
+  {
+    id: "insights",
+    title: "AI Insights",
+    description:
+      "Auto-generated intelligent analysis including attendance summaries, anomaly alerts, and trend predictions powered by AI.",
+    icon: Sparkles,
+    color: "text-amber-600",
+    bgColor: "bg-amber-50 dark:bg-amber-950",
+    href: "/dashboard/ai/insights",
+    badge: "Auto",
   },
 ];
 

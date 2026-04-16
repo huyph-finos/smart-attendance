@@ -29,6 +29,8 @@ import {
   LogOut,
   Fingerprint,
   Menu,
+  Sparkles,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -37,6 +39,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  children?: NavItem[];
 }
 
 const navItems: NavItem[] = [
@@ -48,7 +51,15 @@ const navItems: NavItem[] = [
   { label: "Employees", href: "/dashboard/employees", icon: Users, adminOnly: true },
   { label: "Anomalies", href: "/dashboard/anomalies", icon: ShieldAlert, adminOnly: true },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3, adminOnly: true },
-  { label: "AI Hub", href: "/dashboard/ai", icon: Bot },
+  {
+    label: "AI Hub",
+    href: "/dashboard/ai",
+    icon: Bot,
+    children: [
+      { label: "Chatbot", href: "/dashboard/ai/chatbot", icon: MessageSquare },
+      { label: "Insights", href: "/dashboard/ai/insights", icon: Sparkles },
+    ],
+  },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -87,20 +98,44 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 : pathname.startsWith(item.href);
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </Link>
+                {item.children && isActive && (
+                  <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l pl-3">
+                    {item.children.map((child) => {
+                      const isChildActive = pathname.startsWith(child.href);
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onNavigate}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                            isChildActive
+                              ? "text-primary"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <child.icon className="h-3.5 w-3.5 shrink-0" />
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </Link>
+              </div>
             );
           })}
         </nav>

@@ -51,6 +51,13 @@ export class NotificationsController {
     return this.notificationsService.markRead(id);
   }
 
+  @Post('mark-all-read')
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  @ApiResponse({ status: 200, description: 'All notifications marked as read' })
+  async markAllRead(@CurrentUser('id') userId: string) {
+    return this.notificationsService.markAllRead(userId);
+  }
+
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
   @ApiResponse({ status: 200, description: 'Unread count' })

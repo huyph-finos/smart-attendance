@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth.store";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -12,8 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { MobileSidebar } from "./sidebar";
+import { NotificationBell } from "./notification-bell";
 import { useRouter } from "next/navigation";
 
 const pageTitles: Record<string, string> = {
@@ -50,11 +50,7 @@ export function Header() {
 
       <div className="ml-auto flex items-center gap-2">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationBell />
 
         {/* User dropdown */}
         <DropdownMenu>
