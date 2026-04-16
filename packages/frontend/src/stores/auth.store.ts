@@ -32,7 +32,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         email,
         password,
       });
-      const { accessToken, refreshToken, user } = response.data;
+      // API may return directly or wrapped in { success, data }
+      const payload = response.data ?? response;
+      const { accessToken, refreshToken, user } = payload;
       setTokens(accessToken, refreshToken);
       set({ user, isLoading: false });
     } catch (error) {
@@ -59,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       const { data: response } = await apiClient.get('/auth/me');
-      set({ user: response.data, isLoading: false });
+      set({ user: response.data ?? response, isLoading: false });
     } catch (error) {
       set({ user: null, isLoading: false });
       throw error;
