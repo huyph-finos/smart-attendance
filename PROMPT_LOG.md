@@ -209,64 +209,44 @@ Ghi lại quá trình làm việc với AI IDE (Claude Code) trong suốt dự �
 
 ## Session 8: Day 8 — Performance Optimization, Mobile Responsiveness & WiFi Verification
 
-### Prompt 17: Architecture Review vs Đề bài
-**Prompt**: "/review @de-bai-smart-attendance-v2.docx đánh giá so với kiến trúc app hiện tại, kiểm tra xem có điểm nào có thể optimize lên được không"
+### Prompt 17: Architecture Review + Optimize + Mobile Responsive
+**Prompt**: "/review @de-bai-smart-attendance-v2.docx đánh giá so với kiến trúc app hiện tại" → "lên kế hoạch optimize, review lại, đảm bảo màn hình scale được cho mobile device"
 
-**Kết quả**:
-- AI đọc docx, cross-reference với codebase → phát hiện 10+ optimization gaps
-- BullMQ installed nhưng zero usage (dead dependency)
-- JWT strategy queries DB mỗi request (scalability bottleneck)
-- DailySummary table tồn tại nhưng không có cron job populate
-- Dashboard cache không invalidate khi check-in
-- Thiếu helmet/compression middleware
-- 12 mobile responsiveness issues (missing viewport meta, dialog not scrollable, tables overflow)
+**AI Generated (Backend — 6 optimizations)**:
+- helmet + compression middleware
+- JWT Redis caching (15min TTL) — eliminates DB query per authenticated request
+- DailySummary nightly cron (`@nestjs/schedule`) — fast path for dashboard trends
+- Dashboard cache invalidation on check-in/check-out + heatmap cache (30s)
+- Anomaly inserts parallelized (`Promise.all`), device update fire-and-forget
+- Push subscription 90-day TTL, remove unused BullMQ dependency
 
-### Prompt 18: Optimize Plan + Implementation
-**Prompt**: "lên kế hoạch optimize, review lại, đảm bảo màn hình scale được cho mobile device"
+**AI Generated (Frontend — 12 mobile fixes)**:
+- `<meta name="viewport">` (critical — without it mobile renders at desktop width)
+- Dialog `max-h-[90dvh] overflow-y-auto` (tall forms scrollable on mobile)
+- PWA manifest `orientation: any` (allow landscape on tablets)
+- Page headers `flex-wrap` for 6 pages, tables `overflow-x-auto` for 3 pages
+- Clock `text-3xl sm:text-5xl`, chatbot `100dvh`, report filters `w-full sm:w-40`
 
-**AI Generated (Backend - 8 phases)**:
-1. Install helmet, compression, @nestjs/schedule; remove unused BullMQ
-2. Add helmet + compression middleware to main.ts
-3. Parallelize anomaly inserts, fire-and-forget device update, push TTL, heatmap cache, dashboard invalidation
-4. JWT Redis caching (15min TTL, DB only on cache miss)
-5. DailySummary cron job (nightly 1AM, aggregate per branch)
-6. Viewport meta tag, dialog scroll fix, manifest orientation
-7. Page headers flex-wrap for 6 pages
-8. Tables overflow-x-auto, clock responsive, chatbot 100dvh, filter widths
+**Verification**: Backend + Frontend build pass (0 errors), 27 files changed
 
-**Verification**: Backend + Frontend build pass (0 errors)
-
-### Prompt 19: WiFi Verification Deep Dive
-**Prompt**: "Hiện tại check wifi tại các branch đang giả lập ntn?"
-→ "giải pháp nào để các BE có thể verify được user đang dùng wifi của branch?"
-→ "ok theo suggest, đảm bảo có thể test pass ở môi trường test local"
-
-**AI Analysis**: Browser has no WiFi API → `use-wifi.ts` is a stub → every check-in gets +15 fraud points
+### Prompt 18: WiFi/IP Verification — Implement & Test Local
+**Prompt**: "implement WiFi verification + IP subnet, đảm bảo test pass ở môi trường local"
 
 **AI Generated (2 features)**:
 
-**Feature 1: IP Subnet Verification (Backend Layer 5)**
-- Schema: `allowedIpRanges String[]` on Branch model
-- New utility: `ip.ts` — pure TS CIDR matching (IPv4 + IPv6 + `::ffff:` mapped)
-- Anti-fraud: `checkIpSubnet()` — 0/20 pts based on IP match
-- Controller: extract client IP from `req.socket.remoteAddress` / `X-Forwarded-For`
+**Feature 1: IP Subnet Verification (Backend — Anti-fraud Layer 5)**
+- Schema: `allowedIpRanges String[]` on Branch model + migration
+- New utility: `ip.ts` — pure TS CIDR matching (IPv4/IPv6/`::ffff:` mapped, no deps)
+- `checkIpSubnet()` layer: 0 pts (match) / 20 pts (no match) / skip (no config)
+- Controller extracts client IP from `req.socket.remoteAddress` / `X-Forwarded-For`
 - Seed: `['127.0.0.0/8', '::1/128', '10.0.0.0/8', '192.168.0.0/16']` → localhost passes
 
-**Feature 2: WiFi Simulation Mode (Frontend)**
-- Check-in page fetches branch WiFi configs via existing `GET /branches/:id`
-- Select dropdown lists branch WiFi APs (SSID + BSSID)
-- When selected: sends real BSSID → backend matches → WiFi score = 0
-- Amber "Demo" badge distinguishes simulation from real data
-- Device Status updates to show simulated WiFi
+**Feature 2: WiFi Simulation Mode (Frontend check-in page)**
+- Fetches branch WiFi configs, Select dropdown lists APs (SSID + BSSID)
+- Selected → sends real BSSID → backend matches → WiFi score = 0
+- "Demo" badge, Device Status reflects simulated WiFi
 
-**Test Scenarios (local)**:
-| Scenario | WiFi | IP | Total |
-|---|---|---|---|
-| WiFi selected (correct) | 0 | 0 | ~0 CLEAN |
-| No WiFi | 15 | 0 | ~15 CLEAN |
-| Wrong BSSID | 30 | 0 | ~30 SUSPICIOUS |
-
-**Verification**: TypeScript 0 errors, Backend + Frontend build pass
+**Verification**: TypeScript 0 errors, Backend + Frontend build pass, 7 files changed
 
 ---
 
@@ -274,7 +254,7 @@ Ghi lại quá trình làm việc với AI IDE (Claude Code) trong suốt dự �
 
 | Metric | Value |
 |--------|-------|
-| Total prompts | ~25 major prompts |
+| Total prompts | ~24 major prompts |
 | Source files generated | 145+ |
 | Lines of code | ~52,000+ |
 | Test files | 6 files, 69 tests |
