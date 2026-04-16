@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { AnomalyType, AnomalySeverity } from '../../generated/prisma';
+import { AnomalyType, AnomalySeverity } from '@prisma/client';
 import {
   haversineDistance,
   isWithinGeofence,
   calculateTravelSpeed,
-} from '@smart-attendance/shared';
+} from '../../common/utils/geo';
 import { CheckInDto } from './dto/check-in.dto';
 
 export interface FraudCheckResult {

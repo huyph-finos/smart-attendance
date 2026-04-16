@@ -1,4 +1,4 @@
-import { PrismaClient, Role, AttendanceStatus, ShiftType, Branch } from '../src/generated/prisma';
+import { PrismaClient, Role, AttendanceStatus, ShiftType, Branch } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 type BranchRecord = Branch;

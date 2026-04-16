@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 const uuidv4 = randomUUID;
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { User } from '../../generated/prisma';
+import { User } from '@prisma/client';
 import { AuthResponseDto, AuthUserDto } from './dto/auth-response.dto';
 
 @Injectable()

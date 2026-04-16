@@ -7,15 +7,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { Prisma, AttendanceStatus, AnomalySeverity } from '../../generated/prisma';
+import { Prisma, AttendanceStatus, AnomalySeverity } from '@prisma/client';
 import { paginatedResponse } from '../../common/dto/pagination.dto';
 import {
   isLate,
   calculateWorkHours,
   calculateOvertime,
   formatDate,
-  haversineDistance,
-} from '@smart-attendance/shared';
+} from '../../common/utils/time';
+import { haversineDistance } from '../../common/utils/geo';
 import { CheckInDto } from './dto/check-in.dto';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 import { AntiFraudService, FraudCheckResult } from './anti-fraud.service';
