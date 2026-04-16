@@ -7,7 +7,7 @@ Xác định vị trí bằng WiFi SSID/BSSID và GPS geofencing. Tích hợp Ag
 ## Tech Stack
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Frontend**: Next.js 16 (App Router), React 19, TailwindCSS 4, shadcn/ui, PWA
-- **Backend**: NestJS 11 (TypeScript), Prisma ORM (PostgreSQL), Bull queue, Socket.IO
+- **Backend**: NestJS 11 (TypeScript), Prisma ORM (PostgreSQL), @nestjs/schedule (cron), Socket.IO
 - **Database**: PostgreSQL 16 + Redis 7
 - **Auth**: JWT (access 15m + refresh 7d) with Redis blacklist
 - **AI**: Gemini API (`@google/generative-ai`, model `gemini-2.5-flash-lite`) with Function Calling — 5 specialized agents
@@ -39,7 +39,7 @@ smart-attendance/
 - Role-based access: ADMIN (full) > MANAGER (own branch) > EMPLOYEE (own data)
 
 ## Key Modules
-- **Anti-Fraud**: Multi-layer scoring (WiFi + GPS + Device + Speed + AI) — 0-100 score
+- **Anti-Fraud**: 5-layer scoring (WiFi + GPS + Device + Speed + IP Subnet) — 0-100 score
 - **AI Agents**: HR Chatbot, Anomaly Detector, Report Generator, Shift Optimizer, Predictive Analytics
 - **AI Tool Use**: Tools execute real Prisma queries; agentic loop continues while Gemini returns functionCall parts
 
@@ -74,8 +74,32 @@ The backend `TransformInterceptor` wraps all success responses as `{ success: tr
 
 ## Accounts (after seed)
 - Admin: admin@smartattendance.com / admin123
-- Employee: emp.{branch-code}.{n}@smartattendance.com / employee123
-- Manager: manager.{branch-code}.{n}@smartattendance.com / employee123
+- Employee: emp.{branchCodeNoDash}.{n}@smartattendance.com / employee123
+  - Branch code has dashes stripped: `HCM-Q1-1` → `hcmq11` → `emp.hcmq11.0@smartattendance.com`
+- Manager: manager.{branchCodeNoDash}.{n}@smartattendance.com / employee123
+
+## Anti-Fraud Layers
+| Layer | Max Score | Description |
+|-------|-----------|-------------|
+| WiFi BSSID | 30 pts | Match BSSID against branch WiFi configs |
+| GPS Geofence | 40 pts | Haversine distance vs branch radius |
+| Device Fingerprint | 50 pts | Mock location, trusted device check |
+| Speed Anomaly | 40 pts | Travel speed between check-ins |
+| IP Subnet | 20 pts | Client IP vs branch `allowedIpRanges` CIDR |
+
+- Thresholds: 0-20 CLEAN, 21-50 SUSPICIOUS, 51-80 HIGH_RISK, >80 BLOCKED
+- Check-in page has **WiFi Simulation** mode (dropdown to select branch WiFi for demo/testing)
+- Branch model has `allowedIpRanges: String[]` for IP verification (seeded with localhost ranges)
+
+## Performance Optimizations (2026-04-17)
+- **helmet** + **compression** middleware in `main.ts`
+- **JWT Redis caching**: user profile cached 15min, DB hit only on cache miss
+- **DailySummary cron** (`@nestjs/schedule`): nightly aggregation for dashboard trends fast path
+- **Dashboard cache invalidation**: check-in/check-out invalidates overview + heatmap cache
+- **Heatmap caching**: 30s TTL on `getBranchHeatmap()`
+- **Anomaly inserts parallelized**: `Promise.all` instead of sequential
+- **Device lastUsedAt fire-and-forget**: non-blocking timestamp update
+- **Push subscription TTL**: 90-day expiry prevents Redis memory leak
 
 ## Recent Bug Fix Log (2026-04-16)
 Comprehensive frontend-backend logic audit — 35 bugs fixed across 18 files:

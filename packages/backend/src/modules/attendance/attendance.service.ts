@@ -34,7 +34,7 @@ export class AttendanceService {
   // Check-In
   // ──────────────────────────────────────────────
 
-  async checkIn(userId: string, dto: CheckInDto) {
+  async checkIn(userId: string, dto: CheckInDto, clientIp?: string) {
     // 1. Get user with branch info
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -68,7 +68,7 @@ export class AttendanceService {
     }
 
     // 2. Run anti-fraud checks
-    const fraudResult = await this.antiFraud.checkFraud(userId, branch.id, dto);
+    const fraudResult = await this.antiFraud.checkFraud(userId, branch.id, dto, clientIp);
 
     // 3. Block if fraud score too high
     if (!fraudResult.passed) {
@@ -123,19 +123,22 @@ export class AttendanceService {
     // 6. Create anomaly records if fraud score warrants it
     if (fraudResult.score > 50) {
       const anomalies = this.antiFraud.getAnomaliesFromResult(fraudResult);
-      for (const anomaly of anomalies) {
-        await this.antiFraud.createAnomaly(
-          attendance.id,
-          anomaly.type,
-          anomaly.severity,
-          anomaly.description,
-          anomaly.metadata,
-        );
-      }
+      await Promise.all(
+        anomalies.map((anomaly) =>
+          this.antiFraud.createAnomaly(
+            attendance.id,
+            anomaly.type,
+            anomaly.severity,
+            anomaly.description,
+            anomaly.metadata,
+          ),
+        ),
+      );
     }
 
-    // 7. Cache today's attendance for fast lookup
+    // 7. Cache today's attendance + invalidate dashboard cache
     await this.cacheAttendance(userId, attendance);
+    this.invalidateDashboardCache(attendance.branchId);
 
     return {
       attendance,
@@ -151,7 +154,7 @@ export class AttendanceService {
   // Check-Out
   // ──────────────────────────────────────────────
 
-  async checkOut(userId: string, dto: CheckInDto) {
+  async checkOut(userId: string, dto: CheckInDto, clientIp?: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -173,6 +176,7 @@ export class AttendanceService {
       userId,
       attendance.branchId,
       dto,
+      clientIp,
     );
 
     // Only block check-out for very high fraud (be more lenient)
@@ -215,19 +219,22 @@ export class AttendanceService {
     // 5. Create anomaly records if check-out fraud score is high
     if (fraudResult.score > 50) {
       const anomalies = this.antiFraud.getAnomaliesFromResult(fraudResult);
-      for (const anomaly of anomalies) {
-        await this.antiFraud.createAnomaly(
-          attendance.id,
-          anomaly.type,
-          anomaly.severity,
-          anomaly.description,
-          anomaly.metadata,
-        );
-      }
+      await Promise.all(
+        anomalies.map((anomaly) =>
+          this.antiFraud.createAnomaly(
+            attendance.id,
+            anomaly.type,
+            anomaly.severity,
+            anomaly.description,
+            anomaly.metadata,
+          ),
+        ),
+      );
     }
 
-    // Update cache
+    // Update cache + invalidate dashboard
     await this.cacheAttendance(userId, updated);
+    this.invalidateDashboardCache(attendance.branchId);
 
     return {
       attendance: updated,
@@ -503,6 +510,7 @@ export class AttendanceService {
     if (checks.gps.score > 0) parts.push(`GPS: ${checks.gps.detail}`);
     if (checks.device.score > 0) parts.push(`Device: ${checks.device.detail}`);
     if (checks.speed.score > 0) parts.push(`Speed: ${checks.speed.detail}`);
+    if (checks.ipSubnet.score > 0) parts.push(`IP: ${checks.ipSubnet.detail}`);
 
     if (parts.length === 0) return 'All verification checks passed';
     return parts.join(' | ');
@@ -541,6 +549,20 @@ export class AttendanceService {
       this.logger.error('Failed to get cached attendance', error);
     }
     return null;
+  }
+
+  /**
+   * Invalidate dashboard caches so real-time stats reflect new attendance.
+   * Fire-and-forget — must not block the check-in/check-out response.
+   */
+  private invalidateDashboardCache(branchId: string): void {
+    Promise.allSettled([
+      this.redis.del(`dashboard:overview:${branchId}`),
+      this.redis.del('dashboard:overview:all'),
+      this.redis.del('dashboard:heatmap'),
+    ]).catch((err) =>
+      this.logger.warn(`Failed to invalidate dashboard cache: ${err.message}`),
+    );
   }
 
   /**

@@ -127,11 +127,23 @@ notifications, ai_conversations, daily_summaries
 - Branch configs: TTL 5m (ít thay đổi)
 - Today's attendance: Cached per user
 
-### Background Jobs (BullMQ)
-- Report export (async, không block API)
-- Anomaly scan (cron every 2h)
-- DailySummary materialization (nightly)
-- Push notifications (non-blocking)
+### Scheduled Jobs (@nestjs/schedule)
+- **DailySummary cron** (`0 1 * * *`): Nightly aggregation per branch → fast path cho dashboard trends
+- Push notifications: non-blocking (fire-and-forget pattern)
+
+### Security & Performance Middleware
+- **helmet**: Security headers (CSP, X-Frame-Options, HSTS, etc.)
+- **compression**: Gzip response compression (~60-80% bandwidth reduction)
+- **JWT Redis caching**: User profile cached 15min → eliminates DB hit per request
+
+### Anti-Fraud: 5-Layer Verification
+| Layer | Max Score | Method |
+|-------|-----------|--------|
+| WiFi BSSID | 30 pts | Match against branch BranchWifi records |
+| GPS Geofence | 40 pts | Haversine distance vs branch radius |
+| Device Fingerprint | 50 pts | Mock location detection, device trust |
+| Speed Anomaly | 40 pts | Impossible travel speed between check-ins |
+| IP Subnet | 20 pts | Client IP vs branch `allowedIpRanges` CIDR |
 
 ### Horizontal Scaling
 - Backend stateless (JWT auth, Redis sessions) → N replicas behind load balancer

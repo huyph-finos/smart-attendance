@@ -126,7 +126,7 @@ export class NotificationsService {
     );
     if (!alreadyExists) {
       subscriptions.push(subscription);
-      await this.redis.set(key, JSON.stringify(subscriptions));
+      await this.redis.setex(key, 60 * 60 * 24 * 90, JSON.stringify(subscriptions)); // 90-day TTL
     }
 
     return { success: true, deviceCount: subscriptions.length };
@@ -169,7 +169,7 @@ export class NotificationsService {
     });
 
     if (validSubscriptions.length !== subscriptions.length) {
-      await this.redis.set(key, JSON.stringify(validSubscriptions));
+      await this.redis.setex(key, 60 * 60 * 24 * 90, JSON.stringify(validSubscriptions)); // 90-day TTL
     }
   }
 }

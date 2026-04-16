@@ -393,10 +393,10 @@ export default function ChatbotPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
+    <div className="flex h-[calc(100dvh-8rem)] gap-4">
       {/* Conversation history sidebar */}
       {sidebarOpen && (
-        <div className="hidden w-64 shrink-0 flex-col md:flex">
+        <div className="hidden w-64 shrink-0 flex-col sm:flex">
           <Card className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b px-3 py-2.5">
               <h3 className="text-sm font-semibold">Lịch sử hội thoại</h3>
@@ -459,7 +459,7 @@ export default function ChatbotPage() {
           <Button
             variant="outline"
             size="icon"
-            className="hidden h-8 w-8 md:flex"
+            className="h-8 w-8"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             title="Toggle conversation sidebar"
           >

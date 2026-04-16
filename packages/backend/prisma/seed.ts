@@ -69,6 +69,7 @@ async function main() {
           workStartTime: ['07:30', '08:00', '08:30', '09:00'][Math.floor(Math.random() * 4)],
           workEndTime: ['16:30', '17:00', '17:30', '18:00'][Math.floor(Math.random() * 4)],
           lateThreshold: [10, 15, 20][Math.floor(Math.random() * 3)],
+          allowedIpRanges: ['127.0.0.0/8', '::1/128', '10.0.0.0/8', '192.168.0.0/16'],
         },
       });
       branches.push(branch);

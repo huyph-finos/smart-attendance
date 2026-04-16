@@ -103,7 +103,8 @@ model Branch {
 
   workStartTime String @default("08:00") @map("work_start_time")
   workEndTime   String @default("17:00") @map("work_end_time")
-  lateThreshold Int    @default(15) @map("late_threshold")
+  lateThreshold   Int      @default(15) @map("late_threshold")
+  allowedIpRanges String[] @default([]) @map("allowed_ip_ranges")
 
   wifiConfigs BranchWifi[]
   employees   User[]

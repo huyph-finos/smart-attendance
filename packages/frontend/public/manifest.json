@@ -4,7 +4,7 @@
   "description": "Hệ thống chấm công thông minh cho doanh nghiệp",
   "start_url": "/dashboard",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "theme_color": "#2563eb",
   "background_color": "#ffffff",
   "icons": [

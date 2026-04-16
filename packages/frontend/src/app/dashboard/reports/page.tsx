@@ -207,7 +207,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div>
           <h2 className="text-xl font-bold tracking-tight">Reports</h2>
           <p className="text-sm text-muted-foreground">
@@ -271,7 +271,7 @@ export default function ReportsPage() {
                 if (v) setBranchFilter(v);
               }}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -295,7 +295,7 @@ export default function ReportsPage() {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
           )}
@@ -308,7 +308,7 @@ export default function ReportsPage() {
                 type="date"
                 value={weekDate}
                 onChange={(e) => setWeekDate(e.target.value)}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
           )}
@@ -321,7 +321,7 @@ export default function ReportsPage() {
                 type="month"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
           )}

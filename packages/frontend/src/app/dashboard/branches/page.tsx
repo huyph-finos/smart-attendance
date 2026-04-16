@@ -101,7 +101,7 @@ export default function BranchesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div>
           <h2 className="text-xl font-bold tracking-tight">Branches</h2>
           <p className="text-sm text-muted-foreground">

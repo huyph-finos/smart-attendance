@@ -247,6 +247,14 @@ export class DashboardService {
   // ──────────────────────────────────────────────
 
   async getBranchHeatmap() {
+    const cacheKey = 'dashboard:heatmap';
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch (error) {
+      this.logger.error('Failed to read heatmap cache', error);
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -281,7 +289,7 @@ export class DashboardService {
       checkedInCounts.map((c) => [c.branchId, c._count.id]),
     );
 
-    return branches.map((branch) => {
+    const result = branches.map((branch) => {
       const employeeCount = employeeMap.get(branch.id) ?? 0;
       const checkedInCount = checkedInMap.get(branch.id) ?? 0;
       const attendanceRate =
@@ -300,6 +308,14 @@ export class DashboardService {
         checkedInCount,
       };
     });
+
+    try {
+      await this.redis.setex(cacheKey, 30, JSON.stringify(result));
+    } catch (error) {
+      this.logger.error('Failed to cache heatmap', error);
+    }
+
+    return result;
   }
 
   // ──────────────────────────────────────────────

@@ -13,6 +13,13 @@ import { useDeviceFingerprint } from "@/hooks/use-device-fingerprint";
 import { useWifi } from "@/hooks/use-wifi";
 import apiClient from "@/lib/api-client";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Clock,
   MapPin,
   Wifi,
@@ -24,6 +31,7 @@ import {
   RefreshCw,
   Shield,
   Users,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +73,13 @@ export default function AttendancePage() {
     branchName?: string;
   } | null>(null);
 
+  // WiFi simulation state
+  const [branchWifiList, setBranchWifiList] = useState<
+    Array<{ id: string; ssid: string; bssid: string; floor?: string | null }>
+  >([]);
+  const [simulatedWifiId, setSimulatedWifiId] = useState<string | null>(null);
+  const simulatedWifi = branchWifiList.find((w) => w.id === simulatedWifiId) ?? null;
+
   // Real-time clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -94,6 +109,18 @@ export default function AttendancePage() {
       .catch(() => {});
   }, [isAdminOrManager]);
 
+  // Fetch branch WiFi configs for simulation
+  useEffect(() => {
+    if (!user?.branchId) return;
+    apiClient
+      .get(`/branches/${user.branchId}`)
+      .then((res) => {
+        const branch = res.data?.data ?? res.data;
+        setBranchWifiList(branch.wifiConfigs ?? []);
+      })
+      .catch(() => {});
+  }, [user?.branchId]);
+
   const hasCheckedIn = !!todayAttendance?.checkInTime;
   const hasCheckedOut = !!todayAttendance?.checkOutTime;
 
@@ -105,13 +132,13 @@ export default function AttendancePage() {
       latitude: geo.latitude,
       longitude: geo.longitude,
       accuracy: geo.accuracy ?? 0,
-      wifiSsid: wifi.ssid,
-      wifiBssid: wifi.bssid,
+      wifiSsid: simulatedWifi?.ssid ?? wifi.ssid,
+      wifiBssid: simulatedWifi?.bssid ?? wifi.bssid,
       deviceFingerprint: device.fingerprint,
       mockLocationDetected: geo.mockLocationDetected,
       mood: selectedMood,
     };
-  }, [geo, wifi, device, selectedMood]);
+  }, [geo, wifi, device, selectedMood, simulatedWifi]);
 
   async function handleCheckIn() {
     setError(null);
@@ -197,7 +224,7 @@ export default function AttendancePage() {
       {/* Real-time Clock Widget */}
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col items-center gap-1 p-6 pb-4">
-          <p className="font-mono text-5xl font-bold tracking-wider tabular-nums">
+          <p className="font-mono text-3xl font-bold tracking-wider tabular-nums sm:text-5xl">
             {timeString}
           </p>
           <p className="text-sm text-muted-foreground">
@@ -355,6 +382,48 @@ export default function AttendancePage() {
         </Card>
       )}
 
+      {/* WiFi Simulation (for testing/demo) */}
+      {!hasCheckedOut && branchWifiList.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Radio className="h-4 w-4" />
+              WiFi Simulation
+              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px]">
+                Demo
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Select
+              value={simulatedWifiId ?? "none"}
+              onValueChange={(val) => setSimulatedWifiId(val === "none" ? null : val)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a WiFi network to simulate..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (no WiFi data)</SelectItem>
+                {branchWifiList.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.ssid}{w.floor ? ` — ${w.floor}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {simulatedWifi && (
+              <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 dark:border-green-800 dark:bg-green-950">
+                <Wifi className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                <div className="text-xs">
+                  <span className="font-medium text-green-700 dark:text-green-300">{simulatedWifi.ssid}</span>
+                  <span className="ml-2 font-mono text-green-600/70 dark:text-green-400/70">{simulatedWifi.bssid}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status indicators */}
       <Card>
         <CardHeader className="pb-3">
@@ -414,14 +483,22 @@ export default function AttendancePage() {
           {/* WiFi */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {wifi.isAvailable ? (
+              {simulatedWifi || wifi.isAvailable ? (
                 <Wifi className="h-4 w-4 text-muted-foreground" />
               ) : (
                 <WifiOff className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="text-sm">WiFi Network</span>
             </div>
-            {wifi.isAvailable ? (
+            {simulatedWifi ? (
+              <Badge
+                variant="outline"
+                className="gap-1 border-amber-200 bg-amber-50 text-amber-600"
+              >
+                <Radio className="h-3 w-3" />
+                {simulatedWifi.ssid}
+              </Badge>
+            ) : wifi.isAvailable ? (
               <Badge
                 variant="outline"
                 className="gap-1 border-green-200 bg-green-50 text-green-600"

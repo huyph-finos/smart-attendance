@@ -142,6 +142,7 @@ describe('AntiFraudService', () => {
           gps: { score: 0, detail: 'ok' },
           device: { score: 0, detail: 'ok' },
           speed: { score: 0, detail: 'ok' },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       expect(service.getAnomaliesFromResult(result)).toEqual([]);
@@ -156,6 +157,7 @@ describe('AntiFraudService', () => {
           gps: { score: 0, detail: 'ok' },
           device: { score: 0, detail: 'ok' },
           speed: { score: 0, detail: 'ok' },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       const anomalies = service.getAnomaliesFromResult(result);
@@ -172,6 +174,7 @@ describe('AntiFraudService', () => {
           gps: { score: 0, detail: 'ok' },
           device: { score: 50, detail: 'Mock location detected' },
           speed: { score: 0, detail: 'ok' },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       const anomalies = service.getAnomaliesFromResult(result);
@@ -189,6 +192,7 @@ describe('AntiFraudService', () => {
           gps: { score: 0, detail: 'ok' },
           device: { score: 0, detail: 'ok' },
           speed: { score: 40, detail: 'Impossible speed', speedKmh: 500 },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       const anomalies = service.getAnomaliesFromResult(result);
@@ -206,6 +210,7 @@ describe('AntiFraudService', () => {
           gps: { score: 40, detail: 'outside', distance: 5000 },
           device: { score: 50, detail: 'mock' },
           speed: { score: 40, detail: 'impossible', speedKmh: 1000 },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       const anomalies = service.getAnomaliesFromResult(result);

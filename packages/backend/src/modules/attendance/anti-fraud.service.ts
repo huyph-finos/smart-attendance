@@ -12,6 +12,7 @@ import {
   isWithinGeofence,
   calculateTravelSpeed,
 } from '../../common/utils/geo';
+import { isIpInAnyRange } from '../../common/utils/ip';
 import { CheckInDto } from './dto/check-in.dto';
 
 export interface FraudCheckResult {
@@ -22,6 +23,7 @@ export interface FraudCheckResult {
     gps: { score: number; detail: string; distance?: number };
     device: { score: number; detail: string };
     speed: { score: number; detail: string; speedKmh?: number };
+    ipSubnet: { score: number; detail: string };
   };
 }
 
@@ -42,17 +44,19 @@ export class AntiFraudService {
     userId: string,
     branchId: string,
     dto: CheckInDto,
+    clientIp?: string,
   ): Promise<FraudCheckResult> {
-    const [wifiResult, gpsResult, deviceResult, speedResult] =
+    const [wifiResult, gpsResult, deviceResult, speedResult, ipResult] =
       await Promise.all([
         this.checkWifi(branchId, dto),
         this.checkGps(branchId, dto),
         this.checkDevice(userId, dto),
         this.checkSpeed(userId, dto),
+        this.checkIpSubnet(branchId, clientIp),
       ]);
 
     const rawScore =
-      wifiResult.score + gpsResult.score + deviceResult.score + speedResult.score;
+      wifiResult.score + gpsResult.score + deviceResult.score + speedResult.score + ipResult.score;
     const score = Math.min(rawScore, 100);
 
     let passed: boolean;
@@ -87,6 +91,7 @@ export class AntiFraudService {
         gps: gpsResult,
         device: deviceResult,
         speed: speedResult,
+        ipSubnet: ipResult,
       },
     };
   }
@@ -198,11 +203,10 @@ export class AntiFraudService {
     });
 
     if (existingDevice) {
-      // Update last used timestamp
-      await this.prisma.userDevice.update({
-        where: { id: existingDevice.id },
-        data: { lastUsedAt: new Date() },
-      });
+      // Fire-and-forget: timestamp update must not block fraud result
+      this.prisma.userDevice
+        .update({ where: { id: existingDevice.id }, data: { lastUsedAt: new Date() } })
+        .catch((err) => this.logger.warn(`Failed to update device lastUsedAt: ${err.message}`));
 
       if (existingDevice.isTrusted) {
         return { score: 0, detail: 'Trusted device recognized' };
@@ -304,6 +308,34 @@ export class AntiFraudService {
       detail: `Normal travel speed: ${speedRounded} km/h`,
       speedKmh: speedRounded,
     };
+  }
+
+  // ──────────────────────────────────────────────
+  // Layer 5: IP Subnet Verification (max 20 points)
+  // ──────────────────────────────────────────────
+
+  private async checkIpSubnet(
+    branchId: string,
+    clientIp?: string,
+  ): Promise<{ score: number; detail: string }> {
+    if (!clientIp) {
+      return { score: 0, detail: 'No client IP available (skipped)' };
+    }
+
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { allowedIpRanges: true },
+    });
+
+    if (!branch || branch.allowedIpRanges.length === 0) {
+      return { score: 0, detail: 'No IP ranges configured (skipped)' };
+    }
+
+    if (isIpInAnyRange(clientIp, branch.allowedIpRanges)) {
+      return { score: 0, detail: `IP ${clientIp} within allowed subnet` };
+    }
+
+    return { score: 20, detail: `IP ${clientIp} not in allowed subnet` };
   }
 
   // ──────────────────────────────────────────────

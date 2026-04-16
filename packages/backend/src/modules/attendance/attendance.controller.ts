@@ -5,9 +5,11 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -38,8 +40,10 @@ export class AttendanceController {
   checkIn(
     @CurrentUser('id') userId: string,
     @Body() dto: CheckInDto,
+    @Req() req: Request,
   ) {
-    return this.attendanceService.checkIn(userId, dto);
+    const clientIp = this.extractClientIp(req);
+    return this.attendanceService.checkIn(userId, dto, clientIp);
   }
 
   @Post('check-out')
@@ -50,8 +54,16 @@ export class AttendanceController {
   checkOut(
     @CurrentUser('id') userId: string,
     @Body() dto: CheckInDto,
+    @Req() req: Request,
   ) {
-    return this.attendanceService.checkOut(userId, dto);
+    const clientIp = this.extractClientIp(req);
+    return this.attendanceService.checkOut(userId, dto, clientIp);
+  }
+
+  private extractClientIp(req: Request): string {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+    return req.socket?.remoteAddress ?? '127.0.0.1';
   }
 
   @Get('today')
