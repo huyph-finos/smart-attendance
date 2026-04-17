@@ -175,6 +175,10 @@ export default function AttendancePage() {
     setError(null);
     const payload = buildPayload();
     if (!payload) return;
+    if (!payload.wifiBssid) {
+      setError("Vui long chon WiFi cua chi nhanh de xac minh vi tri truoc khi cham cong");
+      return;
+    }
 
     try {
       const result = await checkIn(payload);
@@ -191,6 +195,10 @@ export default function AttendancePage() {
     setError(null);
     const payload = buildPayload();
     if (!payload) return;
+    if (!payload.wifiBssid) {
+      setError("Vui long chon WiFi cua chi nhanh de xac minh vi tri truoc khi cham cong");
+      return;
+    }
 
     try {
       const result = await checkOut(payload);
@@ -319,7 +327,9 @@ export default function AttendancePage() {
               }
               className={cn(
                 "h-24 w-24 rounded-full text-lg font-bold shadow-lg transition-all",
-                hasCheckedIn
+                !canCheckIn
+                  ? "bg-muted text-muted-foreground"
+                  : hasCheckedIn
                   ? "bg-orange-500 hover:bg-orange-600"
                   : "bg-green-500 hover:bg-green-600"
               )}
