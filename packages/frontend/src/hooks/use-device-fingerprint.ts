@@ -52,6 +52,7 @@ export function useDeviceFingerprint(): DeviceFingerprint {
   useEffect(() => {
     const cached = localStorage.getItem(FINGERPRINT_KEY);
     if (cached) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrating from localStorage
       setFingerprint(cached);
     } else {
       const fp = generateFingerprint();

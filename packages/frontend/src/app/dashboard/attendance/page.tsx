@@ -63,7 +63,7 @@ export default function AttendancePage() {
 
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fraudResult, setFraudResult] = useState<any>(null);
+  const [fraudResult, setFraudResult] = useState<number | null>(null);
   const [loadingToday, setLoadingToday] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [quickStats, setQuickStats] = useState<{
@@ -123,7 +123,13 @@ export default function AttendancePage() {
       .then((res) => {
         const payload = res.data?.data ?? res.data;
         const list = Array.isArray(payload) ? payload : payload.data ?? [];
-        setAllBranches(list.map((b: any) => ({ id: b.id, name: b.name, code: b.code })));
+        setAllBranches(
+          list.map((b: { id: string; name: string; code: string }) => ({
+            id: b.id,
+            name: b.name,
+            code: b.code,
+          })),
+        );
       })
       .catch(() => {});
   }, [user?.branchId]);
@@ -131,6 +137,7 @@ export default function AttendancePage() {
   // Fetch branch WiFi configs for simulation
   useEffect(() => {
     if (!effectiveBranchId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset list when branch changes
     setBranchWifiList([]);
     setSimulatedWifiId(null);
     apiClient
@@ -172,9 +179,10 @@ export default function AttendancePage() {
     try {
       const result = await checkIn(payload);
       setFraudResult(result?.fraudCheck?.score ?? null);
-    } catch (err: any) {
+    } catch (err) {
       setError(
-        err?.response?.data?.message ?? "Check-in failed. Please try again."
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          "Check-in failed. Please try again."
       );
     }
   }
@@ -187,9 +195,10 @@ export default function AttendancePage() {
     try {
       const result = await checkOut(payload);
       setFraudResult(result?.fraudCheck?.score ?? null);
-    } catch (err: any) {
+    } catch (err) {
       setError(
-        err?.response?.data?.message ?? "Check-out failed. Please try again."
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          "Check-out failed. Please try again."
       );
     }
   }

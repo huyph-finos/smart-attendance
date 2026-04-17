@@ -8,7 +8,11 @@ import { CheckInDto } from './dto/check-in.dto';
 const mockPrisma = {
   branchWifi: { findMany: vi.fn() },
   branch: { findUnique: vi.fn() },
-  userDevice: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
+  userDevice: {
+    findUnique: vi.fn(),
+    update: vi.fn().mockResolvedValue({}),
+    create: vi.fn().mockResolvedValue({}),
+  },
   attendance: { findFirst: vi.fn() },
   anomaly: { create: vi.fn() },
 };
@@ -95,17 +99,18 @@ describe('AntiFraudService', () => {
       expect(result.score).toBeGreaterThan(80);
     });
 
-    it('should return SUSPICIOUS (21-50) for no WiFi data + new device', async () => {
-      mockPrisma.userDevice.findUnique.mockResolvedValue(null); // new device +15
+    it('should auto-BLOCK when no WiFi data (WiFi gate)', async () => {
+      mockPrisma.userDevice.findUnique.mockResolvedValue(null);
 
       const dto: CheckInDto = {
         ...baseDto,
-        wifiBssid: undefined, // +15
+        wifiBssid: undefined,
       };
 
       const result = await service.checkFraud('user-1', 'branch-1', dto);
-      expect(result.passed).toBe(true);
-      expect(result.score).toBe(30); // 15 + 15
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(100);
+      expect(result.checks.wifi.detail).toContain('WiFi');
     });
 
     it('should cache high-risk alert when score 51-80', async () => {

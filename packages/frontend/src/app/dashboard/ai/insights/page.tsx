@@ -348,6 +348,7 @@ export default function InsightsPage() {
   // Auto-fetch all insights on mount
   useEffect(() => {
     for (const config of insightConfigs) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch, state updates happen in promise callback
       fetchInsight(config);
     }
   }, [fetchInsight]);

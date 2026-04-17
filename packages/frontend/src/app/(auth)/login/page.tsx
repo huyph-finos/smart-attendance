@@ -29,9 +29,9 @@ export default function LoginPage() {
     try {
       await login(email, password);
       router.replace("/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       const message =
-        err?.response?.data?.message ||
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "Login failed. Please check your credentials.";
       setError(message);
     }

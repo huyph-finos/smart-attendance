@@ -11,8 +11,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { CheckInDto } from './dto/check-in.dto';
 
-const mockPrisma = {
+const mockPrisma: any = {
   user: { findUnique: vi.fn() },
+  branch: { findMany: vi.fn().mockResolvedValue([]) },
   attendance: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -20,6 +21,7 @@ const mockPrisma = {
     update: vi.fn(),
     count: vi.fn(),
   },
+  $transaction: vi.fn((cb: any) => cb(mockPrisma)),
 };
 
 const mockRedis = {
@@ -83,6 +85,7 @@ describe('AttendanceService', () => {
       gps: { score: 0, detail: 'ok' },
       device: { score: 0, detail: 'ok' },
       speed: { score: 0, detail: 'ok' },
+      ipSubnet: { score: 0, detail: 'ok' },
     },
   };
 
@@ -160,6 +163,7 @@ describe('AttendanceService', () => {
           gps: { score: 20, detail: 'near' },
           device: { score: 15, detail: 'new' },
           speed: { score: 0, detail: 'ok' },
+          ipSubnet: { score: 0, detail: 'ok' },
         },
       };
       mockPrisma.user.findUnique.mockResolvedValue(mockUserWithBranch);

@@ -30,6 +30,7 @@ export default function DashboardLayout({
         })
         .finally(() => setChecking(false));
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync checking flag to user presence
       setChecking(false);
     }
   }, [user, fetchMe, router]);
