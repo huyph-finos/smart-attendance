@@ -2,6 +2,8 @@
 
 Hệ thống chấm công thông minh với AI, xác định vị trí bằng WiFi/GPS, chống gian lận đa tầng, và Agentic AI hỗ trợ HR.
 
+**🎬 Demo video**: https://share.descript.com/view/YBNb9N5QhM8
+
 ## Quick Start
 
 ### Với Docker (khuyến nghị)

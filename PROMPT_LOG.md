@@ -2,6 +2,8 @@
 
 Ghi lại quá trình làm việc với AI IDE (Claude Code) trong suốt dự án.
 
+**Demo video**: https://share.descript.com/view/YBNb9N5QhM8
+
 ---
 
 ## Session 1: Day 1 — Foundation Setup

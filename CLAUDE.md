@@ -4,6 +4,8 @@
 Hệ thống chấm công thông minh cho doanh nghiệp quy mô 100 chi nhánh, 5.000 nhân viên.
 Xác định vị trí bằng WiFi SSID/BSSID và GPS geofencing. Tích hợp Agentic AI (Gemini API + Function Calling).
 
+**Demo video**: https://share.descript.com/view/YBNb9N5QhM8
+
 ## Tech Stack
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Frontend**: Next.js 16 (App Router), React 19, TailwindCSS 4, shadcn/ui, PWA
