@@ -60,6 +60,16 @@ cd packages/frontend
 pnpm dev                 # Next.js dev server
 ```
 
+## CI/Build Order (important)
+Fresh checkouts need these steps before `lint`/`build`/`test`:
+1. `pnpm install --frozen-lockfile`
+2. `pnpm --filter @smart-attendance/shared build` — backend imports from shared's `dist/`
+3. `pnpm --filter @smart-attendance/backend prisma:generate` — backend needs `@prisma/client` types
+4. Then: `lint` (backend uses `tsc --noEmit`), `test`, or `build`
+
+The backend `lint` script is `tsc --noEmit` (ESLint not installed). Frontend has ESLint.
+The pnpm version is pinned by `packageManager: pnpm@10.28.1` in root `package.json` — do NOT add `version:` to `pnpm/action-setup` in CI (causes `ERR_PNPM_BAD_PM_VERSION`).
+
 ## Important: Frontend-Backend Contract
 The backend `TransformInterceptor` wraps all success responses as `{ success: true, data: T }`.
 - Axios response: `res.data` = `{ success, data }`, actual payload = `res.data.data`
